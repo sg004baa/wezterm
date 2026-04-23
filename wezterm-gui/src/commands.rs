@@ -53,6 +53,10 @@ fn us_layout_shift(s: &str) -> String {
     }
 }
 
+fn visible_string_for_palette(text: &str) -> String {
+    text.chars().flat_map(|c| c.escape_default()).collect()
+}
+
 /// `CommandDef` defines a command in the UI.
 pub struct CommandDef {
     /// Brief description
@@ -1704,14 +1708,16 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
                 icon: Some("oct_browser"),
             },
         },
-        SendString(text) => CommandDef {
+        SendString(text) => {
+            let visible = visible_string_for_palette(text);
+            CommandDef {
             brief: format!(
-                "Sends `{text}` to the active pane, \
+                "Sends `{visible}` to the active pane, \
                            as though you typed it"
             )
             .into(),
             doc: format!(
-                "Sends `{text}` to the active pane, as \
+                "Sends `{visible}` to the active pane, as \
                          though you typed it"
             )
             .into(),
@@ -1719,6 +1725,7 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             args: &[],
             menubar: &[],
             icon: Some("md_keyboard_variant"),
+        }
         },
         SendKey(key) => CommandDef {
             brief: format!(
