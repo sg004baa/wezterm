@@ -1443,9 +1443,14 @@ fn apply_theme(hwnd: HWND) -> Option<LRESULT> {
                 SystemBackdrop::Tabbed => DWM_SYSTEMBACKDROP_TYPE::DWMSBT_TABBEDWINDOW,
             };
 
-            let margins = match inner.config.window_decorations {
-                WindowDecorations::TITLE => -1,
-                _ => 0,
+            let margins = if inner
+                .config
+                .window_decorations
+                .contains(WindowDecorations::TITLE)
+            {
+                -1
+            } else {
+                0
             };
 
             DwmExtendFrameIntoClientArea(
