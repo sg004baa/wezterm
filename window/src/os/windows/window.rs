@@ -1608,6 +1608,27 @@ unsafe fn wm_kill_focus(
     None
 }
 
+unsafe fn wm_nc_activate(
+    hwnd: HWND,
+    msg: UINT,
+    _wparam: WPARAM,
+    lparam: LPARAM,
+) -> Option<LRESULT> {
+    // When win32_system_backdrop is configured, DWM stops compositing the
+    // backdrop into the client area while the window is inactive, which makes
+    // Mica/Acrylic disappear on focus loss. Force the non-client area to be
+    // painted as if the window were active so DWM keeps the backdrop visible.
+    let backdrop = rc_from_hwnd(hwnd)?.borrow().config.win32_system_backdrop;
+    if matches!(
+        backdrop,
+        SystemBackdrop::Acrylic | SystemBackdrop::Mica | SystemBackdrop::Tabbed
+    ) {
+        Some(DefWindowProcW(hwnd, msg, 1, lparam))
+    } else {
+        None
+    }
+}
+
 unsafe fn wm_paint(hwnd: HWND, _msg: UINT, _wparam: WPARAM, _lparam: LPARAM) -> Option<LRESULT> {
     let inner = rc_from_hwnd(hwnd)?;
     let mut inner = inner.borrow_mut();
@@ -2928,6 +2949,7 @@ unsafe fn do_wnd_proc(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> 
         WM_NCDESTROY => wm_ncdestroy(hwnd, msg, wparam, lparam),
         WM_NCCALCSIZE => wm_nccalcsize(hwnd, msg, wparam, lparam),
         WM_NCHITTEST => wm_nchittest(hwnd, msg, wparam, lparam),
+        WM_NCACTIVATE => wm_nc_activate(hwnd, msg, wparam, lparam),
         WM_PAINT => wm_paint(hwnd, msg, wparam, lparam),
         WM_ENTERSIZEMOVE | WM_EXITSIZEMOVE => wm_enter_exit_size_move(hwnd, msg, wparam, lparam),
         WM_WINDOWPOSCHANGED => wm_windowposchanged(hwnd, msg, wparam, lparam),
