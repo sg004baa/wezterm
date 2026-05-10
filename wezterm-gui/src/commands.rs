@@ -2047,6 +2047,20 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             menubar: &["Edit"],
             icon: None,
         },
+        ToggleFloatingOverlay(args) => {
+            let inner_brief = match derive_command_from_key_assignment(&args.action) {
+                Some(cmd) => cmd.brief.into_owned(),
+                None => format!("{:?}", args.action),
+            };
+            CommandDef {
+                brief: format!("Toggle floating overlay: {inner_brief}").into(),
+                doc: "Toggles the wrapped action inside a floating overlay".into(),
+                keys: vec![],
+                args: &[ArgType::ActivePane],
+                menubar: &[],
+                icon: None,
+            }
+        }
     })
 }
 
