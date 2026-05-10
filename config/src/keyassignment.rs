@@ -532,6 +532,11 @@ fn default_message() -> String {
 }
 
 #[derive(Debug, Clone, PartialEq, FromDynamic, ToDynamic)]
+pub struct ToggleFloatingOverlay {
+    pub action: Box<KeyAssignment>,
+}
+
+#[derive(Debug, Clone, PartialEq, FromDynamic, ToDynamic)]
 pub enum KeyAssignment {
     SpawnTab(SpawnTabDomain),
     SpawnWindow,
@@ -648,6 +653,7 @@ pub enum KeyAssignment {
     PromptInputLine(PromptInputLine),
     InputSelector(InputSelector),
     Confirmation(Confirmation),
+    ToggleFloatingOverlay(ToggleFloatingOverlay),
 }
 impl_lua_conversion_dynamic!(KeyAssignment);
 

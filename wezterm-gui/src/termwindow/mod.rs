@@ -3184,6 +3184,9 @@ impl TermWindow {
             PromptInputLine(args) => self.show_prompt_input_line(args),
             InputSelector(args) => self.show_input_selector(args),
             Confirmation(args) => self.show_confirmation(args),
+            ToggleFloatingOverlay(args) => {
+                self.perform_key_assignment(pane, &args.action)?;
+            }
         };
         Ok(PerformAssignmentResult::Handled)
     }
