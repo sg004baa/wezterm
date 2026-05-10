@@ -644,6 +644,94 @@ const fn default_zero_pixel() -> Dimension {
     Dimension::Pixels(0.)
 }
 
+#[derive(Debug, Clone, Copy, FromDynamic, ToDynamic)]
+pub struct FloatingOverlayPadding {
+    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_padding")]
+    pub left: Dimension,
+    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_padding")]
+    pub top: Dimension,
+    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_padding")]
+    pub right: Dimension,
+    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_padding")]
+    pub bottom: Dimension,
+}
+
+impl Default for FloatingOverlayPadding {
+    fn default() -> Self {
+        Self {
+            left: default_overlay_padding(),
+            top: default_overlay_padding(),
+            right: default_overlay_padding(),
+            bottom: default_overlay_padding(),
+        }
+    }
+}
+
+fn default_overlay_padding() -> Dimension {
+    Dimension::Cells(0.25)
+}
+
+#[derive(Debug, Clone, Copy, FromDynamic, ToDynamic, PartialEq, Eq, Default)]
+pub enum FloatingOverlayPosition {
+    #[default]
+    Center,
+}
+
+#[derive(Debug, Clone, FromDynamic, ToDynamic)]
+pub struct FloatingOverlayConfig {
+    #[dynamic(default = "default_overlay_border")]
+    pub border: FloatingPaneBorderConfig,
+
+    #[dynamic(default)]
+    pub padding: FloatingOverlayPadding,
+
+    #[dynamic(try_from = "crate::units::OptPixelUnit", default)]
+    pub width: Option<Dimension>,
+
+    #[dynamic(try_from = "crate::units::OptPixelUnit", default)]
+    pub height: Option<Dimension>,
+
+    #[dynamic(default)]
+    pub bg_color: Option<RgbaColor>,
+
+    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_corner_radius")]
+    pub corner_radius: Dimension,
+
+    #[dynamic(default)]
+    pub position: FloatingOverlayPosition,
+}
+
+fn default_overlay_border() -> FloatingPaneBorderConfig {
+    FloatingPaneBorderConfig {
+        left_width: Dimension::Pixels(1.),
+        right_width: Dimension::Pixels(1.),
+        top_height: Dimension::Pixels(1.),
+        bottom_height: Dimension::Pixels(1.),
+        left_color: None,
+        right_color: None,
+        top_color: None,
+        bottom_color: None,
+    }
+}
+
+fn default_overlay_corner_radius() -> Dimension {
+    Dimension::Cells(0.25)
+}
+
+impl Default for FloatingOverlayConfig {
+    fn default() -> Self {
+        Self {
+            border: default_overlay_border(),
+            padding: FloatingOverlayPadding::default(),
+            width: None,
+            height: None,
+            bg_color: None,
+            corner_radius: default_overlay_corner_radius(),
+            position: FloatingOverlayPosition::default(),
+        }
+    }
+}
+
 impl Default for WindowFrameConfig {
     fn default() -> Self {
         Self {
