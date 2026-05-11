@@ -79,6 +79,7 @@ mod mouseevent;
 pub mod palette;
 pub mod paneselect;
 mod prevcursor;
+pub mod prompt_modal;
 pub mod render;
 pub mod resize;
 mod selection;
@@ -3185,9 +3186,18 @@ impl TermWindow {
             PromptInputLine(args) => self.show_prompt_input_line(args),
             InputSelector(args) => self.show_input_selector(args),
             Confirmation(args) => self.show_confirmation(args),
-            ToggleFloatingOverlay(args) => {
-                self.perform_key_assignment(pane, &args.action)?;
-            }
+            ToggleFloatingOverlay(args) => match &*args.action {
+                PromptInputLine(prompt_args) => {
+                    let modal = crate::termwindow::prompt_modal::FloatingPromptInputLine::new(
+                        self,
+                        prompt_args.clone(),
+                    )?;
+                    self.set_modal(Rc::new(modal));
+                }
+                _ => {
+                    self.perform_key_assignment(pane, &args.action)?;
+                }
+            },
         };
         Ok(PerformAssignmentResult::Handled)
     }
