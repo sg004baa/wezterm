@@ -83,6 +83,7 @@ pub mod prompt_modal;
 pub mod render;
 pub mod resize;
 mod selection;
+pub mod selector_modal;
 pub mod spawn;
 pub mod webgpu;
 use crate::spawn::SpawnWhere;
@@ -3191,6 +3192,13 @@ impl TermWindow {
                     let modal = crate::termwindow::prompt_modal::FloatingPromptInputLine::new(
                         self,
                         prompt_args.clone(),
+                    )?;
+                    self.set_modal(Rc::new(modal));
+                }
+                InputSelector(selector_args) => {
+                    let modal = crate::termwindow::selector_modal::FloatingInputSelector::new(
+                        self,
+                        selector_args.clone(),
                     )?;
                     self.set_modal(Rc::new(modal));
                 }
