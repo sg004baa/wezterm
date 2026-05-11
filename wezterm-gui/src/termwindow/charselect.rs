@@ -1,11 +1,7 @@
 use crate::overlay::selector::{matcher_pattern, matcher_score};
 use crate::termwindow::box_model::*;
+use crate::termwindow::floating_container::{build_container, FloatingContainerOptions};
 use crate::termwindow::modal::Modal;
-use crate::termwindow::render::corners::{
-    BOTTOM_LEFT_ROUNDED_CORNER, BOTTOM_RIGHT_ROUNDED_CORNER, TOP_LEFT_ROUNDED_CORNER,
-    TOP_RIGHT_ROUNDED_CORNER,
-};
-use crate::termwindow::DimensionContext;
 use crate::utilsprites::RenderMetrics;
 use crate::TermWindow;
 use config::keyassignment::{
@@ -390,16 +386,6 @@ impl CharSelector {
             .fonts
             .char_select_font()
             .expect("to resolve char selection font");
-        let metrics = RenderMetrics::with_font_metrics(&font.metrics());
-
-        let top_bar_height = if term_window.show_tab_bar && !term_window.config.tab_bar_at_bottom {
-            term_window.tab_bar_pixel_height().unwrap()
-        } else {
-            0.
-        };
-        let (padding_left, padding_top) = term_window.padding_left_top();
-        let border = term_window.get_os_border();
-        let top_pixel_y = top_bar_height + padding_top + border.top.get() as f32;
 
         let label = match group {
             CharSelectGroup::RecentlyUsed => "Recent",
@@ -472,79 +458,22 @@ impl CharSelector {
             );
         }
 
-        let element = Element::new(&font, ElementContent::Children(elements))
-            .colors(ElementColors {
-                border: BorderColor::new(
-                    term_window.config.char_select_bg_color.to_linear().into(),
-                ),
-                bg: term_window.config.char_select_bg_color.to_linear().into(),
-                text: term_window.config.char_select_fg_color.to_linear().into(),
-            })
-            .margin(BoxDimension {
-                left: Dimension::Cells(1.25),
-                right: Dimension::Cells(1.25),
-                top: Dimension::Cells(1.25),
-                bottom: Dimension::Cells(1.25),
-            })
-            .padding(BoxDimension {
-                left: Dimension::Cells(0.25),
-                right: Dimension::Cells(0.25),
-                top: Dimension::Cells(0.25),
-                bottom: Dimension::Cells(0.25),
-            })
-            .border(BoxDimension::new(Dimension::Pixels(1.)))
-            .border_corners(Some(Corners {
-                top_left: SizedPoly {
-                    width: Dimension::Cells(0.25),
-                    height: Dimension::Cells(0.25),
-                    poly: TOP_LEFT_ROUNDED_CORNER,
-                },
-                top_right: SizedPoly {
-                    width: Dimension::Cells(0.25),
-                    height: Dimension::Cells(0.25),
-                    poly: TOP_RIGHT_ROUNDED_CORNER,
-                },
-                bottom_left: SizedPoly {
-                    width: Dimension::Cells(0.25),
-                    height: Dimension::Cells(0.25),
-                    poly: BOTTOM_LEFT_ROUNDED_CORNER,
-                },
-                bottom_right: SizedPoly {
-                    width: Dimension::Cells(0.25),
-                    height: Dimension::Cells(0.25),
-                    poly: BOTTOM_RIGHT_ROUNDED_CORNER,
-                },
-            }));
+        let bg = term_window.config.char_select_bg_color.to_linear();
+        let fg = term_window.config.char_select_fg_color.to_linear();
 
-        let dimensions = term_window.dimensions;
-        let size = term_window.terminal_size;
-
-        let computed = term_window.compute_element(
-            &LayoutContext {
-                height: DimensionContext {
-                    dpi: dimensions.dpi as f32,
-                    pixel_max: dimensions.pixel_height as f32,
-                    pixel_cell: metrics.cell_size.height as f32,
-                },
-                width: DimensionContext {
-                    dpi: dimensions.dpi as f32,
-                    pixel_max: dimensions.pixel_width as f32,
-                    pixel_cell: metrics.cell_size.width as f32,
-                },
-                bounds: euclid::rect(
-                    padding_left,
-                    top_pixel_y,
-                    size.cols as f32 * term_window.render_metrics.cell_size.width as f32,
-                    size.rows as f32 * term_window.render_metrics.cell_size.height as f32,
-                ),
-                metrics: &metrics,
-                gl_state: term_window.render_state.as_ref().unwrap(),
+        build_container(
+            term_window,
+            elements,
+            FloatingContainerOptions {
+                font: &font,
+                bg_color: bg,
+                text_color: fg,
+                border_color: bg,
+                width_override: None,
+                max_height: None,
                 zindex: 100,
             },
-            &element,
-        )?;
-
-        Ok(vec![computed])
+        )
     }
 
     fn updated_input(&self) {
