@@ -12,14 +12,17 @@ use window::color::LinearRgba;
 
 pub struct FloatingContainerOptions<'a> {
     pub font: &'a Rc<LoadedFont>,
-    pub bg_color: LinearRgba,
+    /// Caller can force its own bg color (e.g. `command_palette_bg_color`).
+    /// `None` defers to `floating_overlay.bg_color`, then to a final fallback.
+    pub bg_color: Option<LinearRgba>,
     pub text_color: LinearRgba,
-    pub border_color: LinearRgba,
+    /// `None` defers to `floating_overlay.border.*_color`, then to bg.
+    pub border_color: Option<LinearRgba>,
     /// Caller-supplied width override; takes precedence over
     /// `floating_overlay.width` from config.
     pub width_override: Option<Dimension>,
     /// Pixel height of the bounds rectangle handed to layout.
-    /// Caller decides what "max" means (typically content area height).
+    /// `None` defers to `floating_overlay.height`, then to terminal rows.
     pub max_height: Option<f32>,
     pub zindex: i8,
 }
@@ -59,10 +62,19 @@ pub fn build_container(
         .map(|d| d.evaluate_as_pixels(width_ctx))
         .unwrap_or_else(|| (size.cols / 3).max(120).min(size.cols) as f32 * cell_w);
 
+    let bg_color = opts
+        .bg_color
+        .or_else(|| cfg.bg_color.map(|c| c.to_linear()))
+        .unwrap_or_else(|| term_window.config.command_palette_bg_color.to_linear());
+    let border_color = opts
+        .border_color
+        .or_else(|| cfg.border.top_color.map(|c| c.to_linear()))
+        .unwrap_or(bg_color);
+
     let element = Element::new(opts.font, ElementContent::Children(inner_elements))
         .colors(ElementColors {
-            border: BorderColor::new(opts.border_color.into()),
-            bg: opts.bg_color.into(),
+            border: BorderColor::new(border_color),
+            bg: bg_color.into(),
             text: opts.text_color.into(),
         })
         .margin(BoxDimension {
@@ -108,8 +120,14 @@ pub fn build_container(
         .min_width(Some(Dimension::Pixels(desired_pixel_width)));
 
     let x_adjust = ((avail_pixel_width - padding_left) - desired_pixel_width) / 2.;
+    let height_ctx = DimensionContext {
+        dpi: dimensions.dpi as f32,
+        pixel_max: size.rows as f32 * cell_h,
+        pixel_cell: cell_h,
+    };
     let max_height = opts
         .max_height
+        .or_else(|| cfg.height.map(|d| d.evaluate_as_pixels(height_ctx)))
         .unwrap_or_else(|| size.rows as f32 * cell_h);
 
     let computed = term_window.compute_element(

@@ -466,9 +466,9 @@ impl CharSelector {
             elements,
             FloatingContainerOptions {
                 font: &font,
-                bg_color: bg,
+                bg_color: Some(bg),
                 text_color: fg,
-                border_color: bg,
+                border_color: Some(bg),
                 width_override: None,
                 max_height: None,
                 zindex: 100,

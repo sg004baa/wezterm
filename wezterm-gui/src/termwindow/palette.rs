@@ -441,9 +441,9 @@ impl CommandPalette {
             elements,
             crate::termwindow::floating_container::FloatingContainerOptions {
                 font: &font,
-                bg_color: bg,
+                bg_color: Some(bg),
                 text_color: fg,
-                border_color: bg,
+                border_color: Some(bg),
                 width_override: Some(Dimension::Pixels(desired_pixel_width)),
                 max_height: Some(max_height),
                 zindex: 100,

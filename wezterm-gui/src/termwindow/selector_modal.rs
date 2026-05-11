@@ -162,9 +162,9 @@ impl FloatingInputSelector {
             elements,
             FloatingContainerOptions {
                 font: &font,
-                bg_color: bg,
+                bg_color: None,
                 text_color: fg,
-                border_color: bg,
+                border_color: None,
                 width_override: None,
                 max_height: None,
                 zindex: 100,

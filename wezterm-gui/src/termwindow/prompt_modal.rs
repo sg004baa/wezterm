@@ -60,7 +60,6 @@ impl FloatingPromptInputLine {
             .command_palette_font()
             .expect("to resolve command palette font");
 
-        let bg = term_window.config.command_palette_bg_color.to_linear();
         let fg = term_window.config.command_palette_fg_color.to_linear();
 
         let mut elements = Vec::new();
@@ -95,9 +94,9 @@ impl FloatingPromptInputLine {
             elements,
             FloatingContainerOptions {
                 font: &font,
-                bg_color: bg,
+                bg_color: None,
                 text_color: fg,
-                border_color: bg,
+                border_color: None,
                 width_override: None,
                 max_height: None,
                 zindex: 100,
