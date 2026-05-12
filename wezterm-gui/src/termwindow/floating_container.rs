@@ -78,7 +78,7 @@ pub fn build_container(
     bg_color.3 *= cfg.opacity;
     border_color.3 *= cfg.opacity;
 
-    let element = Element::new(opts.font, ElementContent::Children(inner_elements))
+    let mut element = Element::new(opts.font, ElementContent::Children(inner_elements))
         .colors(ElementColors {
             border: BorderColor::new(border_color),
             bg: bg_color.into(),
@@ -132,12 +132,15 @@ pub fn build_container(
         pixel_max: avail_pixel_height,
         pixel_cell: cell_h,
     };
-    let resolved_height = cfg
-        .height
-        .map(|d| d.evaluate_as_pixels(height_ctx))
+    let forced_height = cfg.height.map(|d| d.evaluate_as_pixels(height_ctx));
+    let frame_height = forced_height
         .or(opts.max_height)
         .unwrap_or(avail_pixel_height * 0.5);
-    let top_pixel_y = top_origin_y + ((avail_pixel_height - resolved_height) / 2.).max(0.);
+    let top_pixel_y = top_origin_y + ((avail_pixel_height - frame_height) / 2.).max(0.);
+
+    if let Some(h) = forced_height {
+        element = element.min_height(Some(Dimension::Pixels(h)));
+    }
 
     let computed = term_window.compute_element(
         &LayoutContext {
@@ -155,7 +158,7 @@ pub fn build_container(
                 padding_left + x_adjust,
                 top_pixel_y,
                 desired_pixel_width,
-                resolved_height,
+                frame_height,
             ),
             metrics: &metrics,
             gl_state: term_window.render_state.as_ref().unwrap(),
