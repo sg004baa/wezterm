@@ -12,11 +12,12 @@ use window::color::LinearRgba;
 
 pub struct FloatingContainerOptions<'a> {
     pub font: &'a Rc<LoadedFont>,
-    /// Caller can force its own bg color (e.g. `command_palette_bg_color`).
-    /// `None` defers to `floating_overlay.bg_color`, then to a final fallback.
+    /// Modal's per-Modal default bg (e.g. `command_palette_bg_color`).
+    /// Overridden by `floating_overlay.bg_color` when set; otherwise used as-is.
     pub bg_color: Option<LinearRgba>,
     pub text_color: LinearRgba,
-    /// `None` defers to `floating_overlay.border.*_color`, then to bg.
+    /// Modal's per-Modal default border color.
+    /// Overridden by `floating_overlay.border.top_color` when set; falls back to bg.
     pub border_color: Option<LinearRgba>,
     /// Caller-supplied width override; takes precedence over
     /// `floating_overlay.width` from config.
@@ -62,13 +63,16 @@ pub fn build_container(
         .map(|d| d.evaluate_as_pixels(width_ctx))
         .unwrap_or_else(|| (size.cols / 3).max(120).min(size.cols) as f32 * cell_w);
 
-    let bg_color = opts
+    let bg_color = cfg
         .bg_color
-        .or_else(|| cfg.bg_color.map(|c| c.to_linear()))
+        .map(|c| c.to_linear())
+        .or(opts.bg_color)
         .unwrap_or_else(|| term_window.config.command_palette_bg_color.to_linear());
-    let border_color = opts
-        .border_color
-        .or_else(|| cfg.border.top_color.map(|c| c.to_linear()))
+    let border_color = cfg
+        .border
+        .top_color
+        .map(|c| c.to_linear())
+        .or(opts.border_color)
         .unwrap_or(bg_color);
 
     let element = Element::new(opts.font, ElementContent::Children(inner_elements))
