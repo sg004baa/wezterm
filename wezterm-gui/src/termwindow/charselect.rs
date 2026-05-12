@@ -639,9 +639,11 @@ impl Modal for CharSelector {
             .expect("to resolve char selection font");
         let metrics = RenderMetrics::with_font_metrics(&font.metrics());
 
-        let max_rows_on_screen = ((term_window.dimensions.pixel_height * 8 / 10)
-            / metrics.cell_size.height as usize)
-            - 2;
+        let frame_h = crate::termwindow::floating_container::resolved_frame_height_pixels(
+            term_window,
+        );
+        let max_rows_on_screen =
+            (frame_h as usize / metrics.cell_size.height as usize).saturating_sub(2);
         *self.max_rows_on_screen.borrow_mut() = max_rows_on_screen;
 
         let rebuild_matches = results

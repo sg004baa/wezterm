@@ -575,9 +575,11 @@ impl Modal for CommandPalette {
             .expect("to resolve char selection font");
         let metrics = RenderMetrics::with_font_metrics(&font.metrics());
 
-        let mut max_rows_on_screen = ((term_window.dimensions.pixel_height * 8 / 10)
-            / metrics.cell_size.height as usize)
-            - 2;
+        let frame_h = crate::termwindow::floating_container::resolved_frame_height_pixels(
+            term_window,
+        );
+        let mut max_rows_on_screen =
+            (frame_h as usize / metrics.cell_size.height as usize).saturating_sub(2);
         if let Some(size) = term_window.config.command_palette_rows {
             max_rows_on_screen = max_rows_on_screen.min(size);
         }

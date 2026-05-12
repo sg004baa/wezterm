@@ -93,9 +93,11 @@ impl FloatingInputSelector {
         let bg_color: InheritableColor = bg.into();
         let fg_color: InheritableColor = fg.into();
 
-        let max_rows_on_screen = ((term_window.dimensions.pixel_height * 8 / 10)
-            / metrics.cell_size.height as usize)
-            .saturating_sub(4);
+        let frame_h = crate::termwindow::floating_container::resolved_frame_height_pixels(
+            term_window,
+        );
+        let max_rows_on_screen =
+            (frame_h as usize / metrics.cell_size.height as usize).saturating_sub(4);
         *self.max_rows_on_screen.borrow_mut() = max_rows_on_screen;
 
         let selected_row = *self.selected_row.borrow();
