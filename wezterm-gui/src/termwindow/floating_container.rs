@@ -162,7 +162,16 @@ pub fn build_container(
         .unwrap_or(avail_pixel_height * 0.8);
     let top_pixel_y = top_origin_y + ((avail_pixel_height - frame_height) / 2.).max(0.);
 
-    element = element.min_height(Some(Dimension::Pixels(frame_height)));
+    // `min_height` constrains the inner content_rect, not the outer bounds.
+    // To make the visible frame equal `frame_height`, request the inner size
+    // and let padding/margin/border be added back on top by `compute_rects`.
+    let pad_top = cfg.padding.top.evaluate_as_pixels(height_ctx);
+    let pad_bottom = cfg.padding.bottom.evaluate_as_pixels(height_ctx);
+    let border_top = cfg.border.top_height.evaluate_as_pixels(height_ctx);
+    let border_bottom = cfg.border.bottom_height.evaluate_as_pixels(height_ctx);
+    let inner_height =
+        (frame_height - 2. * (pad_top + pad_bottom) - border_top - border_bottom).max(0.);
+    element = element.min_height(Some(Dimension::Pixels(inner_height)));
 
     let computed = term_window.compute_element(
         &LayoutContext {
