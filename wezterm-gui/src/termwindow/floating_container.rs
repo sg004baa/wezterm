@@ -43,13 +43,14 @@ pub fn build_container(
     };
     let (padding_left, padding_top) = term_window.padding_left_top();
     let border = term_window.get_os_border();
-    let top_pixel_y = top_bar_height + padding_top + border.top.get() as f32;
+    let top_origin_y = top_bar_height + padding_top + border.top.get() as f32;
 
     let dimensions = term_window.dimensions;
     let size = term_window.terminal_size;
     let cell_w = term_window.render_metrics.cell_size.width as f32;
     let cell_h = term_window.render_metrics.cell_size.height as f32;
     let avail_pixel_width = size.cols as f32 * cell_w;
+    let avail_pixel_height = size.rows as f32 * cell_h;
 
     let width_ctx = DimensionContext {
         dpi: dimensions.dpi as f32,
@@ -63,17 +64,19 @@ pub fn build_container(
         .map(|d| d.evaluate_as_pixels(width_ctx))
         .unwrap_or_else(|| (size.cols / 3).max(120).min(size.cols) as f32 * cell_w);
 
-    let bg_color = cfg
+    let mut bg_color = cfg
         .bg_color
         .map(|c| c.to_linear())
         .or(opts.bg_color)
         .unwrap_or_else(|| term_window.config.command_palette_bg_color.to_linear());
-    let border_color = cfg
+    let mut border_color = cfg
         .border
         .top_color
         .map(|c| c.to_linear())
         .or(opts.border_color)
         .unwrap_or(bg_color);
+    bg_color.3 *= cfg.opacity;
+    border_color.3 *= cfg.opacity;
 
     let element = Element::new(opts.font, ElementContent::Children(inner_elements))
         .colors(ElementColors {
@@ -126,13 +129,15 @@ pub fn build_container(
     let x_adjust = ((avail_pixel_width - padding_left) - desired_pixel_width) / 2.;
     let height_ctx = DimensionContext {
         dpi: dimensions.dpi as f32,
-        pixel_max: size.rows as f32 * cell_h,
+        pixel_max: avail_pixel_height,
         pixel_cell: cell_h,
     };
-    let max_height = opts
-        .max_height
-        .or_else(|| cfg.height.map(|d| d.evaluate_as_pixels(height_ctx)))
-        .unwrap_or_else(|| size.rows as f32 * cell_h);
+    let resolved_height = cfg
+        .height
+        .map(|d| d.evaluate_as_pixels(height_ctx))
+        .or(opts.max_height)
+        .unwrap_or(avail_pixel_height * 0.5);
+    let top_pixel_y = top_origin_y + ((avail_pixel_height - resolved_height) / 2.).max(0.);
 
     let computed = term_window.compute_element(
         &LayoutContext {
@@ -150,7 +155,7 @@ pub fn build_container(
                 padding_left + x_adjust,
                 top_pixel_y,
                 desired_pixel_width,
-                max_height,
+                resolved_height,
             ),
             metrics: &metrics,
             gl_state: term_window.render_state.as_ref().unwrap(),
