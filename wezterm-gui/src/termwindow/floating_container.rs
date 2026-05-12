@@ -22,18 +22,17 @@ pub struct FloatingContainerOptions<'a> {
     /// Caller-supplied width override; takes precedence over
     /// `floating_overlay.width` from config.
     pub width_override: Option<Dimension>,
-    /// Pixel height of the bounds rectangle handed to layout.
-    /// `None` defers to `floating_overlay.height`, then to terminal rows.
-    pub max_height: Option<f32>,
     pub zindex: i8,
 }
 
-/// Pixel height of the floating frame as the caller should size its contents.
-/// Honors `floating_overlay.height` if set, otherwise falls back to 80% of
-/// the terminal cell area. Callers use this to clamp `max_rows_on_screen`
-/// so item-heavy modals (CommandPalette, InputSelector, CharSelector)
-/// don't outgrow the configured frame.
-pub fn resolved_frame_height_pixels(term_window: &TermWindow) -> f32 {
+/// Pixel height available to the caller for laying out items inside the frame.
+/// Equals the resolved frame height (cfg.height, falling back to 80% of the
+/// terminal cell area) minus the configured margin/padding/border so callers
+/// can compute `max_rows_on_screen` without leaving dead space at the bottom.
+///
+/// Why margin is counted twice: `build_container` applies the same
+/// `cfg.padding` to both `.margin(..)` and `.padding(..)` on the outer element.
+pub fn resolved_inner_content_pixels(term_window: &TermWindow) -> f32 {
     let cfg = &term_window.config.floating_overlay;
     let cell_h = term_window.render_metrics.cell_size.height as f32;
     let avail = term_window.terminal_size.rows as f32 * cell_h;
@@ -42,9 +41,15 @@ pub fn resolved_frame_height_pixels(term_window: &TermWindow) -> f32 {
         pixel_max: avail,
         pixel_cell: cell_h,
     };
-    cfg.height
+    let frame_h = cfg
+        .height
         .map(|d| d.evaluate_as_pixels(ctx))
-        .unwrap_or(avail * 0.8)
+        .unwrap_or(avail * 0.8);
+    let pad_top = cfg.padding.top.evaluate_as_pixels(ctx);
+    let pad_bottom = cfg.padding.bottom.evaluate_as_pixels(ctx);
+    let border_top = cfg.border.top_height.evaluate_as_pixels(ctx);
+    let border_bottom = cfg.border.bottom_height.evaluate_as_pixels(ctx);
+    (frame_h - 2. * (pad_top + pad_bottom) - border_top - border_bottom).max(0.)
 }
 
 pub fn build_container(
@@ -151,15 +156,13 @@ pub fn build_container(
         pixel_max: avail_pixel_height,
         pixel_cell: cell_h,
     };
-    let forced_height = cfg.height.map(|d| d.evaluate_as_pixels(height_ctx));
-    let frame_height = forced_height
-        .or(opts.max_height)
+    let frame_height = cfg
+        .height
+        .map(|d| d.evaluate_as_pixels(height_ctx))
         .unwrap_or(avail_pixel_height * 0.8);
     let top_pixel_y = top_origin_y + ((avail_pixel_height - frame_height) / 2.).max(0.);
 
-    if let Some(h) = forced_height {
-        element = element.min_height(Some(Dimension::Pixels(h)));
-    }
+    element = element.min_height(Some(Dimension::Pixels(frame_height)));
 
     let computed = term_window.compute_element(
         &LayoutContext {

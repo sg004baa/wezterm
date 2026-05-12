@@ -98,7 +98,6 @@ impl FloatingPromptInputLine {
                 text_color: fg,
                 border_color: None,
                 width_override: None,
-                max_height: None,
                 zindex: 100,
             },
         )

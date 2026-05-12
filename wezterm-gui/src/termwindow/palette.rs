@@ -428,10 +428,8 @@ impl CommandPalette {
 
         let size = term_window.terminal_size;
         let cell_w = term_window.render_metrics.cell_size.width as f32;
-        let cell_h = term_window.render_metrics.cell_size.height as f32;
         let desired_width = (size.cols / 3).max(120).min(size.cols);
         let desired_pixel_width = desired_width as f32 * cell_w;
-        let max_height = size.rows as f32 * cell_h;
 
         let bg = term_window.config.command_palette_bg_color.to_linear();
         let fg = term_window.config.command_palette_fg_color.to_linear();
@@ -445,7 +443,6 @@ impl CommandPalette {
                 text_color: fg,
                 border_color: Some(bg),
                 width_override: Some(Dimension::Pixels(desired_pixel_width)),
-                max_height: Some(max_height),
                 zindex: 100,
             },
         )
@@ -575,11 +572,11 @@ impl Modal for CommandPalette {
             .expect("to resolve char selection font");
         let metrics = RenderMetrics::with_font_metrics(&font.metrics());
 
-        let frame_h = crate::termwindow::floating_container::resolved_frame_height_pixels(
+        let inner_h = crate::termwindow::floating_container::resolved_inner_content_pixels(
             term_window,
         );
         let mut max_rows_on_screen =
-            (frame_h as usize / metrics.cell_size.height as usize).saturating_sub(2);
+            (inner_h as usize / metrics.cell_size.height as usize).saturating_sub(1);
         if let Some(size) = term_window.config.command_palette_rows {
             max_rows_on_screen = max_rows_on_screen.min(size);
         }

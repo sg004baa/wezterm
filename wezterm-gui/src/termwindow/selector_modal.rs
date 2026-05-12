@@ -93,11 +93,17 @@ impl FloatingInputSelector {
         let bg_color: InheritableColor = bg.into();
         let fg_color: InheritableColor = fg.into();
 
-        let frame_h = crate::termwindow::floating_container::resolved_frame_height_pixels(
+        let inner_h = crate::termwindow::floating_container::resolved_inner_content_pixels(
             term_window,
         );
-        let max_rows_on_screen =
-            (frame_h as usize / metrics.cell_size.height as usize).saturating_sub(4);
+        let header_rows = if self.title.is_empty() { 0 } else { 1 };
+        let desc_rows = if self.description.is_empty() {
+            0
+        } else {
+            self.description.lines().count()
+        };
+        let max_rows_on_screen = (inner_h as usize / metrics.cell_size.height as usize)
+            .saturating_sub(header_rows + desc_rows);
         *self.max_rows_on_screen.borrow_mut() = max_rows_on_screen;
 
         let selected_row = *self.selected_row.borrow();
@@ -168,7 +174,6 @@ impl FloatingInputSelector {
                 text_color: fg,
                 border_color: None,
                 width_override: None,
-                max_height: None,
                 zindex: 100,
             },
         )

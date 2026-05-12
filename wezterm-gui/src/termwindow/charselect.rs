@@ -470,7 +470,6 @@ impl CharSelector {
                 text_color: fg,
                 border_color: Some(bg),
                 width_override: None,
-                max_height: None,
                 zindex: 100,
             },
         )
@@ -639,11 +638,11 @@ impl Modal for CharSelector {
             .expect("to resolve char selection font");
         let metrics = RenderMetrics::with_font_metrics(&font.metrics());
 
-        let frame_h = crate::termwindow::floating_container::resolved_frame_height_pixels(
+        let inner_h = crate::termwindow::floating_container::resolved_inner_content_pixels(
             term_window,
         );
         let max_rows_on_screen =
-            (frame_h as usize / metrics.cell_size.height as usize).saturating_sub(2);
+            (inner_h as usize / metrics.cell_size.height as usize).saturating_sub(1);
         *self.max_rows_on_screen.borrow_mut() = max_rows_on_screen;
 
         let rebuild_matches = results
