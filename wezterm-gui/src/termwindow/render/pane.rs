@@ -2,12 +2,12 @@ use crate::quad::{HeapQuadAllocator, QuadTrait, TripleLayerQuadAllocator};
 use crate::selection::SelectionRange;
 use crate::termwindow::box_model::*;
 use crate::termwindow::render::{
-    same_hyperlink, CursorProperties, LineQuadCacheKey, LineQuadCacheValue, LineToEleShapeCacheKey,
-    RenderScreenLineParams,
+    CursorProperties, LineQuadCacheKey, LineQuadCacheValue, LineToEleShapeCacheKey,
+    RenderScreenLineParams, same_hyperlink,
 };
 use crate::termwindow::{ScrollHit, UIItem, UIItemType};
-use ::window::bitmaps::TextureRect;
 use ::window::DeadKeyStatus;
+use ::window::bitmaps::TextureRect;
 use anyhow::Context;
 use config::VisualBellTarget;
 use mux::pane::{PaneId, WithPaneLines};
@@ -220,10 +220,8 @@ impl crate::TermWindow {
                 min_height as usize,
             );
 
-            let scroll_height = info.height;
-
             let abs_thumb_top = thumb_y_offset + info.top;
-            let thumb_size = scroll_height;
+            let thumb_size = info.height;
             let color = palette.scrollbar_thumb.to_linear();
 
             // Adjust the scrollbar thumb position
@@ -235,21 +233,21 @@ impl crate::TermWindow {
                 x: thumb_x,
                 width: padding as usize,
                 y: thumb_y_offset,
-                height: scroll_height,
+                height: info.top,
                 item_type: UIItemType::AboveScrollThumb,
             });
             self.ui_items.push(UIItem {
                 x: thumb_x,
                 width: padding as usize,
                 y: abs_thumb_top,
-                height: scroll_height,
+                height: thumb_size,
                 item_type: UIItemType::ScrollThumb,
             });
             self.ui_items.push(UIItem {
                 x: thumb_x,
                 width: padding as usize,
                 y: abs_thumb_top + thumb_size,
-                height: scroll_height.saturating_sub(abs_thumb_top + thumb_size),
+                height: temp_bottom.saturating_sub(abs_thumb_top + thumb_size),
                 item_type: UIItemType::BelowScrollThumb,
             });
 
