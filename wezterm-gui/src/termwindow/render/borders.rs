@@ -176,8 +176,8 @@ impl crate::TermWindow {
         let top_pixel_y = top_bar_height + padding_top + os_border.top.get() as f32;
         let background_rect = self.compute_background_rect_with_scrollbar(
             &pos,
-            padding_top,
             padding_left,
+            padding_top,
             &os_border,
             top_pixel_y,
         );
