@@ -1940,12 +1940,14 @@ impl TabInner {
         }
 
         let active_floating_index = self.active_floating_pane;
-        floating_pane_indices_to_remove.retain(|&idx| idx <= active_floating_index);
-        let new_active_floating_pane =
-            active_floating_index.saturating_sub(floating_pane_indices_to_remove.len());
+        let removed_before_active = floating_pane_indices_to_remove
+            .iter()
+            .filter(|&&idx| idx <= active_floating_index)
+            .count();
+        let new_active_floating_pane = active_floating_index.saturating_sub(removed_before_active);
         self.set_active_floating_pane(new_active_floating_pane, false);
 
-        for i in floating_pane_indices_to_remove {
+        for i in floating_pane_indices_to_remove.into_iter().rev() {
             self.floating_panes.remove(i);
         }
 
@@ -2734,15 +2736,16 @@ mod test {
         assert_eq!(80, panes[0].width);
         assert_eq!(24, panes[0].height);
 
-        assert!(tab
-            .compute_split_size(
+        assert!(
+            tab.compute_split_size(
                 1,
                 SplitRequest {
                     direction: SplitDirection::Horizontal,
                     ..Default::default()
                 }
             )
-            .is_none());
+            .is_none()
+        );
 
         let horz_size = tab
             .compute_split_size(
