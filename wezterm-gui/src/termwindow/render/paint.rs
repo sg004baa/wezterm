@@ -149,7 +149,7 @@ impl crate::TermWindow {
     pub fn paint_modal(&mut self) -> anyhow::Result<()> {
         if let Some(modal) = self.get_modal() {
             let computed_elements = modal.computed_element(self)?;
-            for computed in &computed_elements {
+            for computed in computed_elements.iter() {
                 self.paint_floating_area_backdrop(
                     computed.zindex - 1,
                     computed.zindex,
@@ -229,17 +229,14 @@ impl crate::TermWindow {
         let restore_layer = gl_state
             .layer_for_zindex(restore_zindex)
             .with_context(|| format!("layer_for_zindex({restore_zindex})"))?;
+        let restore_color = self
+            .palette()
+            .background
+            .to_linear()
+            .mul_alpha(self.config.window_background_opacity);
         let mut restore_quads = restore_layer.quad_allocator();
-        self.filled_rectangle(
-            &mut restore_quads,
-            0,
-            rect,
-            self.palette()
-                .background
-                .to_linear()
-                .mul_alpha(self.config.window_background_opacity),
-        )
-        .context("filled_rectangle for floating backdrop restore")?;
+        self.filled_rectangle(&mut restore_quads, 0, rect, restore_color)
+            .context("filled_rectangle for floating backdrop restore")?;
 
         Ok(())
     }
