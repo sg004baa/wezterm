@@ -102,6 +102,16 @@ pub fn build_container(
     bg_color.3 *= cfg.opacity;
     border_color.3 *= cfg.opacity;
 
+    // When the parent window itself is alpha-blended (window_background_opacity
+    // or a window_background image), drawing the floating frame with its own
+    // alpha < 1.0 lets the desktop bleed through. Stamp an opaque backdrop
+    // matching the frame's outer shape so the frame composites over solid
+    // terminal bg instead of the OS-level transparency.
+    let window_is_transparent = !term_window.window_background.is_empty()
+        || term_window.config.window_background_opacity != 1.0;
+    let mut backdrop_color = term_window.palette().background.to_linear();
+    backdrop_color.3 = 1.0;
+
     let mut element = Element::new(opts.font, ElementContent::Children(inner_elements))
         .colors(ElementColors {
             border: BorderColor::new(border_color),
@@ -173,6 +183,87 @@ pub fn build_container(
         (frame_height - 2. * (pad_top + pad_bottom) - border_top - border_bottom).max(0.);
     element = element.min_height(Some(Dimension::Pixels(inner_height)));
 
+    let bounds = euclid::rect(
+        padding_left + x_adjust,
+        top_pixel_y,
+        desired_pixel_width,
+        frame_height,
+    );
+
+    let mut results = Vec::with_capacity(2);
+
+    if window_is_transparent {
+        let backdrop = Element::new(opts.font, ElementContent::Children(vec![]))
+            .colors(ElementColors {
+                border: BorderColor::new(backdrop_color),
+                bg: backdrop_color.into(),
+                text: opts.text_color.into(),
+            })
+            .margin(BoxDimension {
+                left: cfg.padding.left,
+                right: cfg.padding.right,
+                top: cfg.padding.top,
+                bottom: cfg.padding.bottom,
+            })
+            .padding(BoxDimension {
+                left: cfg.padding.left,
+                right: cfg.padding.right,
+                top: cfg.padding.top,
+                bottom: cfg.padding.bottom,
+            })
+            .border(BoxDimension {
+                left: cfg.border.left_width,
+                right: cfg.border.right_width,
+                top: cfg.border.top_height,
+                bottom: cfg.border.bottom_height,
+            })
+            .border_corners(Some(Corners {
+                top_left: SizedPoly {
+                    width: cfg.corner_radius,
+                    height: cfg.corner_radius,
+                    poly: TOP_LEFT_ROUNDED_CORNER,
+                },
+                top_right: SizedPoly {
+                    width: cfg.corner_radius,
+                    height: cfg.corner_radius,
+                    poly: TOP_RIGHT_ROUNDED_CORNER,
+                },
+                bottom_left: SizedPoly {
+                    width: cfg.corner_radius,
+                    height: cfg.corner_radius,
+                    poly: BOTTOM_LEFT_ROUNDED_CORNER,
+                },
+                bottom_right: SizedPoly {
+                    width: cfg.corner_radius,
+                    height: cfg.corner_radius,
+                    poly: BOTTOM_RIGHT_ROUNDED_CORNER,
+                },
+            }))
+            .min_width(Some(Dimension::Pixels(desired_pixel_width)))
+            .min_height(Some(Dimension::Pixels(inner_height)));
+
+        let backdrop_computed = term_window.compute_element(
+            &LayoutContext {
+                height: DimensionContext {
+                    dpi: dimensions.dpi as f32,
+                    pixel_max: dimensions.pixel_height as f32,
+                    pixel_cell: metrics.cell_size.height as f32,
+                },
+                width: DimensionContext {
+                    dpi: dimensions.dpi as f32,
+                    pixel_max: dimensions.pixel_width as f32,
+                    pixel_cell: metrics.cell_size.width as f32,
+                },
+                bounds,
+                metrics: &metrics,
+                gl_state: term_window.render_state.as_ref().unwrap(),
+                zindex: opts.zindex,
+            },
+            &backdrop,
+        )?;
+        results.push(backdrop_computed);
+    }
+
     let computed = term_window.compute_element(
         &LayoutContext {
             height: DimensionContext {
@@ -185,18 +276,14 @@ pub fn build_container(
                 pixel_max: dimensions.pixel_width as f32,
                 pixel_cell: metrics.cell_size.width as f32,
             },
-            bounds: euclid::rect(
-                padding_left + x_adjust,
-                top_pixel_y,
-                desired_pixel_width,
-                frame_height,
-            ),
+            bounds,
             metrics: &metrics,
             gl_state: term_window.render_state.as_ref().unwrap(),
             zindex: opts.zindex,
         },
         &element,
     )?;
+    results.push(computed);
 
-    Ok(vec![computed])
+    Ok(results)
 }
