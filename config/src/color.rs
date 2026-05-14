@@ -646,13 +646,25 @@ const fn default_zero_pixel() -> Dimension {
 
 #[derive(Debug, Clone, Copy, FromDynamic, ToDynamic)]
 pub struct FloatingOverlayPadding {
-    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_padding")]
+    #[dynamic(
+        try_from = "crate::units::PixelUnit",
+        default = "default_overlay_padding"
+    )]
     pub left: Dimension,
-    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_padding")]
+    #[dynamic(
+        try_from = "crate::units::PixelUnit",
+        default = "default_overlay_padding"
+    )]
     pub top: Dimension,
-    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_padding")]
+    #[dynamic(
+        try_from = "crate::units::PixelUnit",
+        default = "default_overlay_padding"
+    )]
     pub right: Dimension,
-    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_padding")]
+    #[dynamic(
+        try_from = "crate::units::PixelUnit",
+        default = "default_overlay_padding"
+    )]
     pub bottom: Dimension,
 }
 
@@ -698,7 +710,10 @@ pub struct FloatingOverlayConfig {
     #[dynamic(default = "default_overlay_opacity")]
     pub opacity: f32,
 
-    #[dynamic(try_from = "crate::units::PixelUnit", default = "default_overlay_corner_radius")]
+    #[dynamic(
+        try_from = "crate::units::PixelUnit",
+        default = "default_overlay_corner_radius"
+    )]
     pub corner_radius: Dimension,
 
     #[dynamic(default)]

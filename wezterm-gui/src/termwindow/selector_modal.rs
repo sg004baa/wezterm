@@ -93,9 +93,8 @@ impl FloatingInputSelector {
         let bg_color: InheritableColor = bg.into();
         let fg_color: InheritableColor = fg.into();
 
-        let inner_h = crate::termwindow::floating_container::resolved_inner_content_pixels(
-            term_window,
-        );
+        let inner_h =
+            crate::termwindow::floating_container::resolved_inner_content_pixels(term_window);
         let header_rows = if self.title.is_empty() { 0 } else { 1 };
         let desc_rows = if self.description.is_empty() {
             0
