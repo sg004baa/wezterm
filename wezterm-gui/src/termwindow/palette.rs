@@ -2,11 +2,7 @@ use crate::commands::{CommandDef, ExpandedCommand};
 use crate::overlay::selector::{matcher_pattern, matcher_score};
 use crate::termwindow::box_model::*;
 use crate::termwindow::modal::Modal;
-use crate::termwindow::render::corners::{
-    BOTTOM_LEFT_ROUNDED_CORNER, BOTTOM_RIGHT_ROUNDED_CORNER, TOP_LEFT_ROUNDED_CORNER,
-    TOP_RIGHT_ROUNDED_CORNER,
-};
-use crate::termwindow::{DimensionContext, GuiWin, TermWindow};
+use crate::termwindow::{GuiWin, TermWindow};
 use crate::utilsprites::RenderMetrics;
 use config::keyassignment::KeyAssignment;
 use config::Dimension;
@@ -258,16 +254,6 @@ impl CommandPalette {
             .fonts
             .command_palette_font()
             .expect("to resolve command palette font");
-        let metrics = RenderMetrics::with_font_metrics(&font.metrics());
-
-        let top_bar_height = if term_window.show_tab_bar && !term_window.config.tab_bar_at_bottom {
-            term_window.tab_bar_pixel_height().unwrap()
-        } else {
-            0.
-        };
-        let (padding_left, padding_top) = term_window.padding_left_top();
-        let border = term_window.get_os_border();
-        let top_pixel_y = top_bar_height + padding_top + border.top.get() as f32;
 
         let mut elements =
             vec![
@@ -440,103 +426,26 @@ impl CommandPalette {
             );
         }
 
-        let dimensions = term_window.dimensions;
         let size = term_window.terminal_size;
-
-        // Avoid covering the entire width
+        let cell_w = term_window.render_metrics.cell_size.width as f32;
         let desired_width = (size.cols / 3).max(120).min(size.cols);
+        let desired_pixel_width = desired_width as f32 * cell_w;
 
-        // Center it
-        let avail_pixel_width =
-            size.cols as f32 * term_window.render_metrics.cell_size.width as f32;
-        let desired_pixel_width =
-            desired_width as f32 * term_window.render_metrics.cell_size.width as f32;
+        let bg = term_window.config.command_palette_bg_color.to_linear();
+        let fg = term_window.config.command_palette_fg_color.to_linear();
 
-        let element = Element::new(&font, ElementContent::Children(elements))
-            .colors(ElementColors {
-                border: BorderColor::new(
-                    term_window
-                        .config
-                        .command_palette_bg_color
-                        .to_linear()
-                        .into(),
-                ),
-                bg: term_window
-                    .config
-                    .command_palette_bg_color
-                    .to_linear()
-                    .into(),
-                text: term_window
-                    .config
-                    .command_palette_fg_color
-                    .to_linear()
-                    .into(),
-            })
-            .margin(BoxDimension {
-                left: Dimension::Cells(0.25),
-                right: Dimension::Cells(0.25),
-                top: Dimension::Cells(0.25),
-                bottom: Dimension::Cells(0.25),
-            })
-            .padding(BoxDimension {
-                left: Dimension::Cells(0.25),
-                right: Dimension::Cells(0.25),
-                top: Dimension::Cells(0.25),
-                bottom: Dimension::Cells(0.25),
-            })
-            .border(BoxDimension::new(Dimension::Pixels(1.)))
-            .border_corners(Some(Corners {
-                top_left: SizedPoly {
-                    width: Dimension::Cells(0.25),
-                    height: Dimension::Cells(0.25),
-                    poly: TOP_LEFT_ROUNDED_CORNER,
-                },
-                top_right: SizedPoly {
-                    width: Dimension::Cells(0.25),
-                    height: Dimension::Cells(0.25),
-                    poly: TOP_RIGHT_ROUNDED_CORNER,
-                },
-                bottom_left: SizedPoly {
-                    width: Dimension::Cells(0.25),
-                    height: Dimension::Cells(0.25),
-                    poly: BOTTOM_LEFT_ROUNDED_CORNER,
-                },
-                bottom_right: SizedPoly {
-                    width: Dimension::Cells(0.25),
-                    height: Dimension::Cells(0.25),
-                    poly: BOTTOM_RIGHT_ROUNDED_CORNER,
-                },
-            }))
-            .min_width(Some(Dimension::Pixels(desired_pixel_width)));
-
-        let x_adjust = ((avail_pixel_width - padding_left) - desired_pixel_width) / 2.;
-
-        let computed = term_window.compute_element(
-            &LayoutContext {
-                height: DimensionContext {
-                    dpi: dimensions.dpi as f32,
-                    pixel_max: dimensions.pixel_height as f32,
-                    pixel_cell: metrics.cell_size.height as f32,
-                },
-                width: DimensionContext {
-                    dpi: dimensions.dpi as f32,
-                    pixel_max: dimensions.pixel_width as f32,
-                    pixel_cell: metrics.cell_size.width as f32,
-                },
-                bounds: euclid::rect(
-                    padding_left + x_adjust,
-                    top_pixel_y,
-                    desired_pixel_width,
-                    size.rows as f32 * term_window.render_metrics.cell_size.height as f32,
-                ),
-                metrics: &metrics,
-                gl_state: term_window.render_state.as_ref().unwrap(),
+        crate::termwindow::floating_container::build_container(
+            term_window,
+            elements,
+            crate::termwindow::floating_container::FloatingContainerOptions {
+                font: &font,
+                bg_color: Some(bg),
+                text_color: fg,
+                border_color: Some(bg),
+                width_override: Some(Dimension::Pixels(desired_pixel_width)),
                 zindex: 100,
             },
-            &element,
-        )?;
-
-        Ok(vec![computed])
+        )
     }
 
     fn updated_input(&self) {
@@ -663,9 +572,10 @@ impl Modal for CommandPalette {
             .expect("to resolve char selection font");
         let metrics = RenderMetrics::with_font_metrics(&font.metrics());
 
-        let mut max_rows_on_screen = ((term_window.dimensions.pixel_height * 8 / 10)
-            / metrics.cell_size.height as usize)
-            - 2;
+        let inner_h =
+            crate::termwindow::floating_container::resolved_inner_content_pixels(term_window);
+        let mut max_rows_on_screen =
+            (inner_h as usize / metrics.cell_size.height as usize).saturating_sub(1);
         if let Some(size) = term_window.config.command_palette_rows {
             max_rows_on_screen = max_rows_on_screen.min(size);
         }

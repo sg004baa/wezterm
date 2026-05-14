@@ -1,7 +1,10 @@
+use crate::renderstate::RenderLayerBlendMode;
 use crate::termwindow::{RenderFrame, TermWindowNotif};
 use ::window::bitmaps::atlas::OutOfTextureSpace;
-use ::window::WindowOps;
+use ::window::color::LinearRgba;
+use ::window::{RectF, WindowOps};
 use anyhow::Context;
+use mux::tab::PositionedPane;
 use smol::Timer;
 use std::time::{Duration, Instant};
 use wezterm_font::ClearShapeCache;
@@ -145,7 +148,16 @@ impl crate::TermWindow {
 
     pub fn paint_modal(&mut self) -> anyhow::Result<()> {
         if let Some(modal) = self.get_modal() {
-            for computed in modal.computed_element(self)?.iter() {
+            let computed_elements = modal.computed_element(self)?;
+            for computed in computed_elements.iter() {
+                self.paint_floating_area_backdrop(
+                    computed.zindex - 1,
+                    computed.zindex,
+                    computed.border_rect,
+                )?;
+            }
+
+            for computed in computed_elements.iter() {
                 let mut ui_items = computed.ui_items();
 
                 let gl_state = self.render_state.as_ref().unwrap();
@@ -154,6 +166,77 @@ impl crate::TermWindow {
                 self.ui_items.append(&mut ui_items);
             }
         }
+
+        Ok(())
+    }
+
+    fn paint_floating_pane_backdrop(&mut self, pos: &PositionedPane) -> anyhow::Result<()> {
+        self.paint_floating_area_backdrop(1, 2, self.floating_pane_outer_rect(pos)?)
+    }
+
+    fn floating_pane_outer_rect(&self, pos: &PositionedPane) -> anyhow::Result<RectF> {
+        let (padding_left, padding_top) = self.padding_left_top();
+        let floating_pane_border = self.get_floating_pane_border();
+        let os_border = self.get_os_border();
+        let tab_bar_height = if self.show_tab_bar {
+            self.tab_bar_pixel_height()?
+        } else {
+            0.
+        };
+
+        let top_bar_height = if self.config.tab_bar_at_bottom {
+            0.0
+        } else {
+            tab_bar_height
+        };
+        let top_pixel_y = top_bar_height + padding_top + os_border.top.get() as f32;
+        let background_rect = self.compute_background_rect_with_scrollbar(
+            pos,
+            padding_left,
+            padding_top,
+            &os_border,
+            top_pixel_y,
+        );
+
+        Ok(euclid::rect(
+            background_rect.origin.x - floating_pane_border.left.get() as f32,
+            background_rect.origin.y - floating_pane_border.top.get() as f32,
+            background_rect.size.width
+                + floating_pane_border.left.get() as f32
+                + floating_pane_border.right.get() as f32,
+            background_rect.size.height
+                + floating_pane_border.top.get() as f32
+                + floating_pane_border.bottom.get() as f32,
+        ))
+    }
+
+    fn paint_floating_area_backdrop(
+        &mut self,
+        clear_zindex: i8,
+        restore_zindex: i8,
+        rect: RectF,
+    ) -> anyhow::Result<()> {
+        let gl_state = self.render_state.as_ref().unwrap();
+
+        let clear_layer = gl_state
+            .layer_for_zindex_and_blend_mode(clear_zindex, RenderLayerBlendMode::Clear)
+            .with_context(|| format!("layer_for_zindex_and_blend_mode({clear_zindex}, Clear)"))?;
+        let mut clear_quads = clear_layer.quad_allocator();
+        self.filled_rectangle(&mut clear_quads, 0, rect, LinearRgba::TRANSPARENT)
+            .context("filled_rectangle for floating backdrop clear")?;
+        drop(clear_quads);
+
+        let restore_layer = gl_state
+            .layer_for_zindex(restore_zindex)
+            .with_context(|| format!("layer_for_zindex({restore_zindex})"))?;
+        let restore_color = self
+            .palette()
+            .background
+            .to_linear()
+            .mul_alpha(self.config.window_background_opacity);
+        let mut restore_quads = restore_layer.quad_allocator();
+        self.filled_rectangle(&mut restore_quads, 0, rect, restore_color)
+            .context("filled_rectangle for floating backdrop restore")?;
 
         Ok(())
     }
@@ -180,6 +263,10 @@ impl crate::TermWindow {
             .layer_for_zindex(0)
             .context("layer_for_zindex(0)")?;
         let mut layers = layer.quad_allocator();
+        let float_layer = gl_state
+            .layer_for_zindex(2)
+            .context("layer_for_zindex(2)")?;
+
         log::trace!("quad map elapsed {:?}", start.elapsed());
         metrics::histogram!("quad.map").record(start.elapsed());
 
@@ -247,14 +334,27 @@ impl crate::TermWindow {
         }
 
         for pos in panes {
-            if pos.is_active {
-                self.update_text_cursor(&pos);
-                if focused {
-                    pos.pane.advise_focus();
-                    mux::Mux::get().record_focus_for_current_identity(pos.pane.pane_id());
+            if !self.is_floating_pane_active() {
+                if pos.is_active {
+                    self.update_text_cursor(&pos);
+                    if focused {
+                        pos.pane.advise_focus();
+                        mux::Mux::get().record_focus_for_current_identity(pos.pane.pane_id());
+                    }
                 }
             }
             self.paint_pane(&pos, &mut layers).context("paint_pane")?;
+        }
+
+        if let Some(floating_pane) = self.get_floating_pane_to_render() {
+            mux::Mux::get().record_focus_for_current_identity(floating_pane.pane.pane_id());
+            self.paint_floating_pane_backdrop(&floating_pane)
+                .context("paint_floating_pane_backdrop")?;
+            let mut floating_pane_layers = float_layer.quad_allocator();
+            self.paint_pane(&floating_pane, &mut floating_pane_layers)
+                .context("paint_pane")?;
+            self.paint_floating_pane_border(floating_pane, &mut floating_pane_layers)
+                .context("paint_floating_pane_border")?;
         }
 
         if let Some(pane) = self.get_active_pane_or_overlay() {

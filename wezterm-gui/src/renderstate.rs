@@ -451,14 +451,30 @@ impl TripleVertexBuffer {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderLayerBlendMode {
+    SourceOver,
+    Clear,
+}
+
 pub struct RenderLayer {
     pub vb: RefCell<[TripleVertexBuffer; 3]>,
     context: RenderContext,
     zindex: i8,
+    pub blend_mode: RenderLayerBlendMode,
 }
 
 impl RenderLayer {
     pub fn new(context: &RenderContext, num_quads: usize, zindex: i8) -> anyhow::Result<Self> {
+        Self::new_with_blend_mode(context, num_quads, zindex, RenderLayerBlendMode::SourceOver)
+    }
+
+    pub fn new_with_blend_mode(
+        context: &RenderContext,
+        num_quads: usize,
+        zindex: i8,
+        blend_mode: RenderLayerBlendMode,
+    ) -> anyhow::Result<Self> {
         let vb = [
             Self::compute_vertices(context, 32)?,
             Self::compute_vertices(context, num_quads)?,
@@ -469,6 +485,7 @@ impl RenderLayer {
             context: context.clone(),
             vb: RefCell::new(vb),
             zindex,
+            blend_mode,
         })
     }
 
@@ -620,17 +637,30 @@ impl RenderState {
     }
 
     pub fn layer_for_zindex(&self, zindex: i8) -> anyhow::Result<Rc<RenderLayer>> {
+        self.layer_for_zindex_and_blend_mode(zindex, RenderLayerBlendMode::SourceOver)
+    }
+
+    pub fn layer_for_zindex_and_blend_mode(
+        &self,
+        zindex: i8,
+        blend_mode: RenderLayerBlendMode,
+    ) -> anyhow::Result<Rc<RenderLayer>> {
         if let Some(layer) = self
             .layers
             .borrow()
             .iter()
-            .find(|l| l.zindex == zindex)
+            .find(|l| l.zindex == zindex && l.blend_mode == blend_mode)
             .map(Rc::clone)
         {
             return Ok(layer);
         }
 
-        let layer = Rc::new(RenderLayer::new(&self.context, 128, zindex)?);
+        let layer = Rc::new(RenderLayer::new_with_blend_mode(
+            &self.context,
+            128,
+            zindex,
+            blend_mode,
+        )?);
         let mut layers = self.layers.borrow_mut();
         layers.push(Rc::clone(&layer));
 

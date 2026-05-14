@@ -80,7 +80,7 @@ pub fn show_line_prompt_overlay(
     Ok(())
 }
 
-fn trampoline(name: String, window: GuiWin, pane: MuxPane, line: Option<String>) {
+pub(crate) fn trampoline(name: String, window: GuiWin, pane: MuxPane, line: Option<String>) {
     promise::spawn::spawn(async move {
         config::with_lua_config_on_main_thread(move |lua| do_event(lua, name, window, pane, line))
             .await

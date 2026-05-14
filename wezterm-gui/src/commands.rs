@@ -1488,6 +1488,18 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             menubar: &["Shell"],
             icon: Some("cod_split_horizontal"),
         },
+        SpawnCommandInNewFloatingPane(SpawnCommand {
+                          domain: SpawnTabDomain::CurrentPaneDomain,
+                          ..
+                      }) => CommandDef {
+            brief: label_string(action, "Create a floating pane".to_string()).into(),
+            doc: "Create a floating pane"
+                .into(),
+            keys: vec![],
+            args: &[ArgType::ActivePane],
+            menubar: &["Shell"],
+            icon: Some("cod_primitive_square"),
+        },
         SplitHorizontal(_) => CommandDef {
             brief: label_string(action, "Split Horizontally (Left/Right)".to_string()).into(),
             doc: "Split the current pane horizontally into two panes, by spawning \
@@ -1507,6 +1519,15 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             args: &[ArgType::ActivePane],
             menubar: &[],
             icon: Some("cod_split_vertical"),
+        },
+        SpawnCommandInNewFloatingPane(_) => CommandDef {
+            brief: label_string(action, "Create a floating pane".to_string()).into(),
+            doc: "Create a floating pane"
+                .into(),
+            keys: vec![],
+            args: &[ArgType::ActivePane],
+            menubar: &[],
+            icon: Some("cod_primitive_square"),
         },
         AdjustPaneSize(PaneDirection::Left, amount) => CommandDef {
             brief: format!("Resize Pane {amount} cell(s) to the Left").into(),
@@ -1598,6 +1619,14 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             brief: "Toggle Pane Zoom".into(),
             doc: "Toggles the zoom state for the current pane".into(),
             keys: vec![(Modifiers::CTRL.union(Modifiers::SHIFT), "z".into())],
+            args: &[ArgType::ActivePane],
+            menubar: &["Window"],
+            icon: Some("md_fullscreen"),
+        },
+        ToggleFloatingPane => CommandDef {
+            brief: "Toggle floating pane".into(),
+            doc: "Toggles the visibility state for the current pane".into(),
+            keys: vec![],
             args: &[ArgType::ActivePane],
             menubar: &["Window"],
             icon: Some("md_fullscreen"),
@@ -2018,6 +2047,20 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             menubar: &["Edit"],
             icon: None,
         },
+        ToggleFloatingOverlay(args) => {
+            let inner_brief = match derive_command_from_key_assignment(&args.action) {
+                Some(cmd) => cmd.brief.into_owned(),
+                None => format!("{:?}", args.action),
+            };
+            CommandDef {
+                brief: format!("Toggle floating overlay: {inner_brief}").into(),
+                doc: "Toggles the wrapped action inside a floating overlay".into(),
+                keys: vec![],
+                args: &[ArgType::ActivePane],
+                menubar: &[],
+                icon: None,
+            }
+        }
     })
 }
 
@@ -2040,6 +2083,10 @@ fn compute_default_actions() -> Vec<KeyAssignment> {
             ..Default::default()
         }),
         SplitHorizontal(SpawnCommand {
+            domain: SpawnTabDomain::CurrentPaneDomain,
+            ..Default::default()
+        }),
+        SpawnCommandInNewFloatingPane(SpawnCommand {
             domain: SpawnTabDomain::CurrentPaneDomain,
             ..Default::default()
         }),
@@ -2140,6 +2187,7 @@ fn compute_default_actions() -> Vec<KeyAssignment> {
         ActivatePaneDirection(PaneDirection::Up),
         ActivatePaneDirection(PaneDirection::Down),
         TogglePaneZoomState,
+        ToggleFloatingPane,
         ActivateLastTab,
         ShowLauncher,
         ShowTabNavigator,

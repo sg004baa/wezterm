@@ -22,10 +22,10 @@ use crate::unix::UnixDomain;
 use crate::wsl::WslDomain;
 use crate::{
     default_config_with_overrides_applied, default_one_point_oh, default_one_point_oh_f64,
-    default_true, default_win32_acrylic_accent_color, CellWidth, GpuInfo,
-    IntegratedTitleButtonColor, KeyMapPreference, LoadedConfig, MouseEventTriggerMods, RgbaColor,
-    SerialDomain, SystemBackdrop, WebGpuPowerPreference, CONFIG_DIRS, CONFIG_FILE_OVERRIDE,
-    CONFIG_OVERRIDES, CONFIG_SKIP, HOME_DIR,
+    default_true, default_win32_acrylic_accent_color, CellWidth, FloatingOverlayConfig,
+    FloatingPaneBorderConfig, GpuInfo, IntegratedTitleButtonColor, KeyMapPreference, LoadedConfig,
+    MouseEventTriggerMods, RgbaColor, SerialDomain, SystemBackdrop, WebGpuPowerPreference,
+    CONFIG_DIRS, CONFIG_FILE_OVERRIDE, CONFIG_OVERRIDES, CONFIG_SKIP, HOME_DIR,
 };
 use anyhow::Context;
 use luahelper::impl_lua_conversion_dynamic;
@@ -141,6 +141,12 @@ pub struct Config {
 
     #[dynamic(default)]
     pub window_frame: WindowFrameConfig,
+
+    #[dynamic(default)]
+    pub floating_pane_border: FloatingPaneBorderConfig,
+
+    #[dynamic(default)]
+    pub floating_overlay: FloatingOverlayConfig,
 
     /// Font to use for CharSelect
     #[dynamic(default)]
@@ -537,6 +543,9 @@ pub struct Config {
     /// Controls the amount of padding to use around the terminal cell area
     #[dynamic(default)]
     pub window_padding: WindowPadding,
+
+    #[dynamic(default = "default_floating_pane_padding")]
+    pub floating_pane_padding: WindowPadding,
 
     #[dynamic(default)]
     pub window_content_alignment: WindowContentAlignment,
@@ -1623,6 +1632,15 @@ fn default_pane_select_font_size() -> f64 {
 fn default_integrated_title_buttons() -> Vec<IntegratedTitleButton> {
     use IntegratedTitleButton::*;
     vec![Hide, Maximize, Close]
+}
+
+fn default_floating_pane_padding() -> WindowPadding {
+    WindowPadding {
+        left: Dimension::Percent(0.20),
+        top: Dimension::Percent(0.20),
+        right: Dimension::Percent(0.20),
+        bottom: Dimension::Percent(0.20),
+    }
 }
 
 fn default_char_select_font_size() -> f64 {
