@@ -258,7 +258,7 @@ impl crate::TermWindow {
                     thumb_x as f32,
                     abs_thumb_top as f32,
                     padding,
-                    scroll_height as f32,
+                    thumb_size as f32,
                 ),
                 color,
             )
