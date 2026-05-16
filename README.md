@@ -6,34 +6,23 @@ Personal fork of [wezterm/wezterm](https://github.com/wezterm/wezterm).
 
 ## Custom modifications
 
-### Floating Pane
-
-Real terminal panes that float over the normal pane layout. Spawned via `SpawnCommandInNewFloatingPane` and toggled with `ToggleFloatingPane`.
-
-### `floating_overlay` config
-
-Unified styling config consumed by all four modal overlays (CommandPalette, CharSelector, PromptInputLine, InputSelector). Add to `wezterm.lua`:
-
-```lua
-config.floating_overlay = {
-  width = '80%',
-  height = '60%',
-  -- bg_color = '#1e1e2e',  -- optional: overrides palette().background
-  padding = { left = 8, right = 8, top = 8, bottom = 8 },
-}
--- opacity is inherited from window_background_opacity automatically
-```
-
-### Opaque backdrop behind floating surfaces
-
-Floating modals and floating panes render an opaque backdrop even when `window_background_opacity < 1.0`. Uses `RenderLayerBlendMode::Clear` to punch through the compositor stack, so the parent window stays transparent while the floating frame appears solid.
-
-### Other fixes (cherry-picked / self-contained)
-
-- Render loop freeze when closing workspaces
-- Win32 system backdrop stays visible while window is inactive
-- Scrollbar hit region heights corrected (`ScrollHit::thumb` field semantics)
-- `compute_background_rect_with_scrollbar` padding argument order corrected
+- Floating Pane
+    - Real terminal panes that float over the normal pane layout. Spawned via `SpawnCommandInNewFloatingPane` and toggled with `ToggleFloatingPane`.
+- Floating Overlay
+    - Unified styling config consumed by all four modal overlays (CommandPalette, CharSelector, PromptInputLine, InputSelector).
+    ```lua
+    config.floating_overlay = {
+      width = '80%',
+      height = '60%',
+      bg_color = '#1e1e2e',
+      padding = { left = 8, right = 8, top = 8, bottom = 8 },
+    }
+    ```
+- fixes
+    - Render loop freeze when closing workspaces
+    - Win32 system backdrop stays visible while window is inactive
+    - Scrollbar hit region heights corrected (`ScrollHit::thumb` field semantics)
+    - `compute_background_rect_with_scrollbar` padding argument order corrected
 
 ---
 
