@@ -413,6 +413,14 @@ impl CharSelector {
             text: term_window.config.char_select_fg_color.to_linear().into(),
         })
         .display(DisplayType::Block)];
+        let palette_bg = term_window.palette().background.to_linear();
+        let solid_bg_color: InheritableColor = term_window
+            .config
+            .char_select_bg_color
+            .as_ref()
+            .map(|color| color.to_linear())
+            .unwrap_or(palette_bg)
+            .into();
 
         for (display_idx, alias) in matches
             .matches
@@ -425,7 +433,7 @@ impl CharSelector {
             let (bg, text) = if display_idx == selected_row {
                 (
                     term_window.config.char_select_fg_color.to_linear().into(),
-                    term_window.config.char_select_bg_color.to_linear().into(),
+                    solid_bg_color.clone(),
                 )
             } else {
                 (
@@ -458,7 +466,11 @@ impl CharSelector {
             );
         }
 
-        let bg = term_window.config.char_select_bg_color.to_linear();
+        let bg = term_window
+            .config
+            .char_select_bg_color
+            .as_ref()
+            .map(|color| color.to_linear());
         let fg = term_window.config.char_select_fg_color.to_linear();
 
         build_container(
@@ -466,9 +478,9 @@ impl CharSelector {
             elements,
             FloatingContainerOptions {
                 font: &font,
-                bg_color: Some(bg),
+                bg_color: bg,
                 text_color: fg,
-                border_color: Some(bg),
+                border_color: bg,
                 width_override: None,
                 zindex: 100,
             },

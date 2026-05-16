@@ -269,6 +269,19 @@ impl CommandPalette {
                     })
                     .display(DisplayType::Block),
             ];
+        let palette_bg = term_window.palette().background.to_linear();
+        let solid_bg_color: InheritableColor = term_window
+            .config
+            .command_palette_bg_color
+            .as_ref()
+            .map(|color| color.to_linear())
+            .unwrap_or(palette_bg)
+            .into();
+        let solid_fg_color: InheritableColor = term_window
+            .config
+            .command_palette_fg_color
+            .to_linear()
+            .into();
 
         for (display_idx, command) in matches
             .matches
@@ -291,17 +304,6 @@ impl CommandPalette {
                 }),
                 None => &' ',
             };
-
-            let solid_bg_color: InheritableColor = term_window
-                .config
-                .command_palette_bg_color
-                .to_linear()
-                .into();
-            let solid_fg_color: InheritableColor = term_window
-                .config
-                .command_palette_fg_color
-                .to_linear()
-                .into();
 
             let (bg, text) = if display_idx == selected_row {
                 (solid_fg_color.clone(), solid_bg_color.clone())
@@ -431,7 +433,11 @@ impl CommandPalette {
         let desired_width = (size.cols / 3).max(120).min(size.cols);
         let desired_pixel_width = desired_width as f32 * cell_w;
 
-        let bg = term_window.config.command_palette_bg_color.to_linear();
+        let bg = term_window
+            .config
+            .command_palette_bg_color
+            .as_ref()
+            .map(|color| color.to_linear());
         let fg = term_window.config.command_palette_fg_color.to_linear();
 
         crate::termwindow::floating_container::build_container(
@@ -439,9 +445,9 @@ impl CommandPalette {
             elements,
             crate::termwindow::floating_container::FloatingContainerOptions {
                 font: &font,
-                bg_color: Some(bg),
+                bg_color: bg,
                 text_color: fg,
-                border_color: Some(bg),
+                border_color: bg,
                 width_override: Some(Dimension::Pixels(desired_pixel_width)),
                 zindex: 100,
             },

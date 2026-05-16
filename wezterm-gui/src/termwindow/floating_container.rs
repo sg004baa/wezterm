@@ -12,8 +12,8 @@ use window::color::LinearRgba;
 
 pub struct FloatingContainerOptions<'a> {
     pub font: &'a Rc<LoadedFont>,
-    /// Modal's per-Modal default bg (e.g. `command_palette_bg_color`).
-    /// Overridden by `floating_overlay.bg_color` when set; otherwise used as-is.
+    /// Optional modal-specific bg override; falls back to palette().background when None.
+    /// Overridden by `floating_overlay.bg_color` when set.
     pub bg_color: Option<LinearRgba>,
     pub text_color: LinearRgba,
     /// Modal's per-Modal default border color.
