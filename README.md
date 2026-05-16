@@ -18,10 +18,10 @@ Unified styling config consumed by all four modal overlays (CommandPalette, Char
 config.floating_overlay = {
   width = '80%',
   height = '60%',
+  -- bg_color = '#1e1e2e',  -- optional: overrides palette().background
   padding = { left = 8, right = 8, top = 8, bottom = 8 },
 }
--- bg_color and opacity are inherited from palette().background and
--- window_background_opacity automatically
+-- opacity is inherited from window_background_opacity automatically
 ```
 
 ### Opaque backdrop behind floating surfaces
