@@ -88,7 +88,13 @@ impl FloatingInputSelector {
             .expect("to resolve command palette font");
         let metrics = RenderMetrics::with_font_metrics(&font.metrics());
 
-        let bg = term_window.config.command_palette_bg_color.to_linear();
+        let palette_bg = term_window.palette().background.to_linear();
+        let bg = term_window
+            .config
+            .command_palette_bg_color
+            .as_ref()
+            .map(|color| color.to_linear())
+            .unwrap_or(palette_bg);
         let fg = term_window.config.command_palette_fg_color.to_linear();
         let bg_color: InheritableColor = bg.into();
         let fg_color: InheritableColor = fg.into();

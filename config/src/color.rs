@@ -706,10 +706,6 @@ pub struct FloatingOverlayConfig {
     #[dynamic(default)]
     pub bg_color: Option<RgbaColor>,
 
-    /// Multiplied into the resolved bg/border alpha. 1.0 = unchanged.
-    #[dynamic(default = "default_overlay_opacity")]
-    pub opacity: f32,
-
     #[dynamic(
         try_from = "crate::units::PixelUnit",
         default = "default_overlay_corner_radius"
@@ -737,10 +733,6 @@ fn default_overlay_corner_radius() -> Dimension {
     Dimension::Cells(0.25)
 }
 
-fn default_overlay_opacity() -> f32 {
-    1.0
-}
-
 impl Default for FloatingOverlayConfig {
     fn default() -> Self {
         Self {
@@ -749,7 +741,6 @@ impl Default for FloatingOverlayConfig {
             width: None,
             height: None,
             bg_color: None,
-            opacity: default_overlay_opacity(),
             corner_radius: default_overlay_corner_radius(),
             position: FloatingOverlayPosition::default(),
         }

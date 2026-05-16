@@ -12,8 +12,8 @@ use window::color::LinearRgba;
 
 pub struct FloatingContainerOptions<'a> {
     pub font: &'a Rc<LoadedFont>,
-    /// Modal's per-Modal default bg (e.g. `command_palette_bg_color`).
-    /// Overridden by `floating_overlay.bg_color` when set; otherwise used as-is.
+    /// Optional modal-specific bg override; falls back to palette().background when None.
+    /// Overridden by `floating_overlay.bg_color` when set.
     pub bg_color: Option<LinearRgba>,
     pub text_color: LinearRgba,
     /// Modal's per-Modal default border color.
@@ -88,19 +88,21 @@ pub fn build_container(
         .map(|d| d.evaluate_as_pixels(width_ctx))
         .unwrap_or_else(|| (size.cols / 3).max(120).min(size.cols) as f32 * cell_w);
 
+    let window_opacity = term_window.config.window_background_opacity;
+    let palette_bg = term_window.palette().background.to_linear();
     let mut bg_color = cfg
         .bg_color
         .map(|c| c.to_linear())
         .or(opts.bg_color)
-        .unwrap_or_else(|| term_window.config.command_palette_bg_color.to_linear());
+        .unwrap_or(palette_bg);
     let mut border_color = cfg
         .border
         .top_color
         .map(|c| c.to_linear())
         .or(opts.border_color)
         .unwrap_or(bg_color);
-    bg_color.3 *= cfg.opacity;
-    border_color.3 *= cfg.opacity;
+    bg_color.3 *= window_opacity;
+    border_color.3 *= window_opacity;
 
     let mut element = Element::new(opts.font, ElementContent::Children(inner_elements))
         .colors(ElementColors {
