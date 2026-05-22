@@ -231,6 +231,15 @@ impl super::TermWindow {
         {
             return Some((entry, table_name.map(|s| s.to_string())));
         }
+        const FLOATING_MODAL_TABLE: &str = "floating_modal";
+        if self.get_modal().is_some() {
+            if let Some(entry) =
+                self.input_map
+                    .lookup_key(keycode, mods, Some(FLOATING_MODAL_TABLE))
+            {
+                return Some((entry, Some(FLOATING_MODAL_TABLE.to_string())));
+            }
+        }
         self.input_map
             .lookup_key(keycode, mods, None)
             .map(|entry| (entry, None))
