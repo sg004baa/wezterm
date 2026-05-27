@@ -2590,10 +2590,11 @@ impl TermWindow {
     ) -> anyhow::Result<PerformAssignmentResult> {
         use KeyAssignment::*;
 
-        if let Some(modal) = self.get_modal() {
-            if modal.perform_assignment(assignment, self) {
-                return Ok(PerformAssignmentResult::Handled);
+        if let FloatingModal(assignment) = assignment {
+            if let Some(modal) = self.get_modal() {
+                modal.perform_assignment(assignment, self);
             }
+            return Ok(PerformAssignmentResult::Handled);
         }
 
         match pane.perform_assignment(assignment) {
@@ -3122,6 +3123,7 @@ impl TermWindow {
             CopyMode(_) => {
                 // NOP here; handled by the overlay directly
             }
+            FloatingModal(_) => {}
             RotatePanes(direction) => {
                 let mux = Mux::get();
                 let tab = match mux.get_active_tab_for_window(self.mux_window_id) {

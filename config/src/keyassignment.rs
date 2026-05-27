@@ -639,6 +639,7 @@ pub enum KeyAssignment {
     AttachDomain(String),
 
     CopyMode(CopyModeAssignment),
+    FloatingModal(FloatingModalAssignment),
     RotatePanes(RotationDirection),
     SplitPane(SplitPane),
     PaneSelect(PaneSelectArguments),
@@ -728,6 +729,14 @@ pub enum CopyModeAssignment {
     JumpBackward { prev_char: bool },
     JumpAgain,
     JumpReverse,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, FromDynamic, ToDynamic)]
+pub enum FloatingModalAssignment {
+    MoveUp,
+    MoveDown,
+    MoveLeft,
+    MoveRight,
 }
 
 pub type KeyTable = HashMap<(KeyCode, Modifiers), KeyTableEntry>;

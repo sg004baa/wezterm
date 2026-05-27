@@ -1,6 +1,6 @@
 use crate::termwindow::box_model::ComputedElement;
 use crate::TermWindow;
-use config::keyassignment::KeyAssignment;
+use config::keyassignment::FloatingModalAssignment;
 use downcast_rs::{impl_downcast, Downcast};
 use std::cell::Ref;
 use wezterm_term::{KeyCode, KeyModifiers, MouseEvent};
@@ -8,7 +8,7 @@ use wezterm_term::{KeyCode, KeyModifiers, MouseEvent};
 pub trait Modal: Downcast {
     fn perform_assignment(
         &self,
-        _assignment: &KeyAssignment,
+        _assignment: &FloatingModalAssignment,
         _term_window: &mut TermWindow,
     ) -> bool {
         false
