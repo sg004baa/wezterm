@@ -2005,6 +2005,14 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             menubar: &["Edit", "Copy Mode"],
             icon: None,
         },
+        FloatingModal(assignment) => CommandDef {
+            brief: format!("{assignment:?}").into(),
+            doc: "".into(),
+            keys: vec![],
+            args: &[ArgType::ActivePane],
+            menubar: &[],
+            icon: None,
+        },
         RotatePanes(direction) => CommandDef {
             brief: format!("Rotate panes {direction:?}").into(),
             doc: format!("Rotate panes {direction:?}").into(),

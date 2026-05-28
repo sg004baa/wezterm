@@ -7,7 +7,7 @@ use crate::termwindow::render::corners::{
 use crate::termwindow::DimensionContext;
 use crate::utilsprites::RenderMetrics;
 use crate::TermWindow;
-use config::keyassignment::{KeyAssignment, PaneSelectArguments, PaneSelectMode};
+use config::keyassignment::{PaneSelectArguments, PaneSelectMode};
 use config::Dimension;
 use mux::Mux;
 use std::cell::{Ref, RefCell};
@@ -226,14 +226,6 @@ impl PaneSelector {
 }
 
 impl Modal for PaneSelector {
-    fn perform_assignment(
-        &self,
-        _assignment: &KeyAssignment,
-        _term_window: &mut TermWindow,
-    ) -> bool {
-        false
-    }
-
     fn mouse_event(&self, _event: MouseEvent, _term_window: &mut TermWindow) -> anyhow::Result<()> {
         Ok(())
     }

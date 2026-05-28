@@ -4,7 +4,7 @@ use crate::termwindow::box_model::*;
 use crate::termwindow::modal::Modal;
 use crate::termwindow::{GuiWin, TermWindow};
 use crate::utilsprites::RenderMetrics;
-use config::keyassignment::KeyAssignment;
+use config::keyassignment::{FloatingModalAssignment, KeyAssignment};
 use config::Dimension;
 use frecency::Frecency;
 use luahelper::{from_lua_value_dynamic, impl_lua_conversion_dynamic};
@@ -490,10 +490,16 @@ impl CommandPalette {
 impl Modal for CommandPalette {
     fn perform_assignment(
         &self,
-        _assignment: &KeyAssignment,
-        _term_window: &mut TermWindow,
+        assignment: &FloatingModalAssignment,
+        term_window: &mut TermWindow,
     ) -> bool {
-        false
+        match assignment {
+            FloatingModalAssignment::MoveUp => self.move_up(),
+            FloatingModalAssignment::MoveDown => self.move_down(),
+            FloatingModalAssignment::MoveLeft | FloatingModalAssignment::MoveRight => return false,
+        }
+        term_window.invalidate_modal();
+        true
     }
 
     fn mouse_event(&self, _event: MouseEvent, _term_window: &mut TermWindow) -> anyhow::Result<()> {

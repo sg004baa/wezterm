@@ -5,7 +5,8 @@ use crate::termwindow::modal::Modal;
 use crate::utilsprites::RenderMetrics;
 use crate::TermWindow;
 use config::keyassignment::{
-    CharSelectArguments, CharSelectGroup, ClipboardCopyDestination, KeyAssignment,
+    CharSelectArguments, CharSelectGroup, ClipboardCopyDestination, FloatingModalAssignment,
+    KeyAssignment,
 };
 use config::Dimension;
 use emojis::{Emoji, Group};
@@ -531,10 +532,17 @@ impl CharSelector {
 impl Modal for CharSelector {
     fn perform_assignment(
         &self,
-        _assignment: &KeyAssignment,
-        _term_window: &mut TermWindow,
+        assignment: &FloatingModalAssignment,
+        term_window: &mut TermWindow,
     ) -> bool {
-        false
+        match assignment {
+            FloatingModalAssignment::MoveUp => self.do_move(Move::Up(1)),
+            FloatingModalAssignment::MoveDown => self.do_move(Move::Down(1)),
+            FloatingModalAssignment::MoveLeft => return false,
+            FloatingModalAssignment::MoveRight => return false,
+        }
+        term_window.invalidate_modal();
+        true
     }
 
     fn mouse_event(&self, _event: MouseEvent, _term_window: &mut TermWindow) -> anyhow::Result<()> {

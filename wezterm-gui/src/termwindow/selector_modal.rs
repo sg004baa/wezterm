@@ -4,7 +4,9 @@ use crate::termwindow::floating_container::{build_container, FloatingContainerOp
 use crate::termwindow::modal::Modal;
 use crate::utilsprites::RenderMetrics;
 use crate::TermWindow;
-use config::keyassignment::{InputSelector, InputSelectorEntry, KeyAssignment};
+use config::keyassignment::{
+    FloatingModalAssignment, InputSelector, InputSelectorEntry, KeyAssignment,
+};
 use mux_lua::MuxPane;
 use std::cell::{Ref, RefCell};
 use wezterm_term::{KeyCode, KeyModifiers, MouseEvent};
@@ -186,6 +188,20 @@ impl FloatingInputSelector {
 }
 
 impl Modal for FloatingInputSelector {
+    fn perform_assignment(
+        &self,
+        assignment: &FloatingModalAssignment,
+        term_window: &mut TermWindow,
+    ) -> bool {
+        match assignment {
+            FloatingModalAssignment::MoveUp => self.move_up(),
+            FloatingModalAssignment::MoveDown => self.move_down(),
+            FloatingModalAssignment::MoveLeft | FloatingModalAssignment::MoveRight => return false,
+        }
+        term_window.invalidate_modal();
+        true
+    }
+
     fn mouse_event(&self, _event: MouseEvent, _term_window: &mut TermWindow) -> anyhow::Result<()> {
         Ok(())
     }
