@@ -152,15 +152,22 @@ class CheckoutStep(ActionStep):
         super().__init__(name, action=f"actions/checkout@{version}", params=params)
 
 
-class InstallCrateStep(ActionStep):
-    def __init__(self, crate: str, key: str, version=None):
-        params = {"crate": crate, "cache-key": key}
-        if version is not None:
-            params["version"] = version
+class InstallNextestStep(ActionStep):
+    """Install cargo-nextest from an official pre-built binary.
+
+    We deliberately avoid compiling nextest from source (e.g. via
+    baptiste0928/cargo-install): recent nextest releases pull in
+    aws-lc-sys, whose build script rejects gcc-9 on ubuntu:20.04
+    (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=95189), which broke
+    the build. taiki-e/install-action downloads the pre-built binary,
+    so it is immune to the host compiler and much faster.
+    """
+
+    def __init__(self):
         super().__init__(
-            f"Install {crate} from Cargo",
-            action="baptiste0928/cargo-install@v3",
-            params=params,
+            "Install cargo-nextest",
+            action="taiki-e/install-action@v2",
+            params={"tool": "nextest"},
         )
 
 
@@ -483,7 +490,7 @@ rustup default {toolchain}
             run = "source /opt/rh/devtoolset-9/enable\n" + run
         return [
             # Install cargo-nextest
-            InstallCrateStep("cargo-nextest", key=self.name),
+            InstallNextestStep(),
             # Run tests
             RunStep(name="Test", run=self.fixup_windows_path(run), shell="cmd")
             if "win" in self.name
