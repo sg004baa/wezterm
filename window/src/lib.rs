@@ -308,6 +308,11 @@ pub trait WindowOps {
     /// windows to move themselves (not Wayland).
     fn set_window_position(&self, _coords: ScreenPoint) {}
 
+    /// Returns the name of the display containing the center of this window.
+    fn current_screen_name(&self) -> Option<String> {
+        None
+    }
+
     /// inform the windowing system of the current textual
     /// cursor input location.  This is used primarily for
     /// the platform specific input method editor

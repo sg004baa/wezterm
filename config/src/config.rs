@@ -777,6 +777,9 @@ pub struct Config {
     #[dynamic(default)]
     pub use_resize_increments: bool,
 
+    #[dynamic(default)]
+    pub remember_window_display: bool,
+
     #[dynamic(default = "default_alternate_buffer_wheel_scroll_speed")]
     pub alternate_buffer_wheel_scroll_speed: u8,
 
