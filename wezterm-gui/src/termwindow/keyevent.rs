@@ -216,14 +216,6 @@ impl super::TermWindow {
         only_key_bindings: OnlyKeyBindings,
     ) -> Option<(KeyTableEntry, Option<String>)> {
         let modal_active = self.get_modal().is_some();
-        if modal_active {
-            log::warn!(
-                "[floating_modal_debug] enter: keycode={:?} mods={:?} only_key_bindings={:?}",
-                keycode,
-                mods,
-                only_key_bindings
-            );
-        }
         if let Some(overlay) = self.pane_state(pane.pane_id()).overlay.as_mut() {
             if let Some((entry, table_name)) = overlay.key_table_state.lookup_key(
                 &self.input_map,
@@ -231,12 +223,6 @@ impl super::TermWindow {
                 mods,
                 only_key_bindings,
             ) {
-                if modal_active {
-                    log::warn!(
-                        "[floating_modal_debug] matched overlay table: {:?}",
-                        table_name
-                    );
-                }
                 return Some((entry, table_name.map(|s| s.to_string())));
             }
         }
@@ -244,34 +230,18 @@ impl super::TermWindow {
             self.key_table_state
                 .lookup_key(&self.input_map, keycode, mods, only_key_bindings)
         {
-            if modal_active {
-                log::warn!(
-                    "[floating_modal_debug] matched key_table_state stack: {:?}",
-                    table_name
-                );
-            }
             return Some((entry, table_name.map(|s| s.to_string())));
         }
         const FLOATING_MODAL_TABLE: &str = "floating_modal";
         if modal_active {
-            let result = self
+            if let Some(entry) = self
                 .input_map
-                .lookup_key(keycode, mods, Some(FLOATING_MODAL_TABLE));
-            log::warn!(
-                "[floating_modal_debug] floating_modal table lookup matched={}",
-                result.is_some()
-            );
-            if let Some(entry) = result {
+                .lookup_key(keycode, mods, Some(FLOATING_MODAL_TABLE))
+            {
                 return Some((entry, Some(FLOATING_MODAL_TABLE.to_string())));
             }
         }
         let fallback = self.input_map.lookup_key(keycode, mods, None);
-        if modal_active {
-            log::warn!(
-                "[floating_modal_debug] default table lookup matched={}",
-                fallback.is_some()
-            );
-        }
         fallback.map(|entry| (entry, None))
     }
 
