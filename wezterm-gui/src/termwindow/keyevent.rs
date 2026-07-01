@@ -234,9 +234,9 @@ impl super::TermWindow {
         }
         const FLOATING_MODAL_TABLE: &str = "floating_modal";
         if modal_active {
-            if let Some(entry) = self
-                .input_map
-                .lookup_key(keycode, mods, Some(FLOATING_MODAL_TABLE))
+            if let Some(entry) =
+                self.input_map
+                    .lookup_key(keycode, mods, Some(FLOATING_MODAL_TABLE))
             {
                 return Some((entry, Some(FLOATING_MODAL_TABLE.to_string())));
             }
