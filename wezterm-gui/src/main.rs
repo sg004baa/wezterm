@@ -57,6 +57,7 @@ mod unicode_names;
 mod uniforms;
 mod update;
 mod utilsprites;
+mod window_display_state;
 
 #[cfg(feature = "dhat-heap")]
 #[global_allocator]

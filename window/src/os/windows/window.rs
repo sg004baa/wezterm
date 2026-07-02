@@ -957,6 +957,23 @@ impl WindowOps for Window {
         });
     }
 
+    fn current_screen_name(&self) -> Option<String> {
+        let HWindow(hwnd) = self.0;
+        let mut rect: RECT = unsafe { std::mem::zeroed() };
+        if unsafe { GetWindowRect(hwnd, &mut rect) } == 0 {
+            return None;
+        }
+
+        let window_rect = euclid::rect(
+            rect.left as isize,
+            rect.top as isize,
+            rect_width(&rect) as isize,
+            rect_height(&rect) as isize,
+        );
+        let screens = Connection::get()?.screens().ok()?;
+        crate::screen::screen_name_for_rect(window_rect, &screens.by_name)
+    }
+
     fn get_clipboard(&self, _clipboard: Clipboard) -> Future<String> {
         Future::result(
             clipboard_win::get_clipboard_string()

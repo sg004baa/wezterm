@@ -812,6 +812,16 @@ impl TermWindow {
             origin = position.origin;
         }
 
+        if config.remember_window_display {
+            if let Some(display) = crate::window_display_state::load_display() {
+                origin = GeometryOrigin::Named(display);
+                if x.is_none() && y.is_none() {
+                    x.replace(Dimension::Pixels(0.));
+                    y.replace(Dimension::Pixels(0.));
+                }
+            }
+        }
+
         let geometry = RequestedWindowGeometry {
             width: Dimension::Pixels(dimensions.pixel_width as f32),
             height: Dimension::Pixels(dimensions.pixel_height as f32),
@@ -960,6 +970,11 @@ impl TermWindow {
                 window_state,
                 live_resizing,
             } => {
+                if self.config.remember_window_display {
+                    if let Some(display) = window.current_screen_name() {
+                        crate::window_display_state::save_display_if_changed(&display);
+                    }
+                }
                 self.resize(dimensions, window_state, window, live_resizing);
                 Ok(true)
             }
