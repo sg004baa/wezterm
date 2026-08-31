@@ -17,6 +17,92 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use wezterm_term::TerminalSize;
 
+#[derive(Debug, Default, PartialEq, Eq)]
+enum ResyncPhase {
+    #[default]
+    Idle,
+    Scheduled,
+    Running,
+}
+
+#[derive(Debug, Default)]
+struct ResyncState {
+    local_resizes_in_flight: usize,
+    requested: bool,
+    phase: ResyncPhase,
+}
+
+impl ResyncState {
+    fn local_resize_started(&mut self) {
+        self.local_resizes_in_flight += 1;
+        if self.phase == ResyncPhase::Running {
+            self.requested = true;
+        }
+    }
+
+    fn local_resize_finished(&mut self) -> bool {
+        assert!(
+            self.local_resizes_in_flight > 0,
+            "local resize completion without a matching start"
+        );
+        self.local_resizes_in_flight -= 1;
+        self.schedule_if_ready()
+    }
+
+    fn request(&mut self) -> bool {
+        match self.phase {
+            ResyncPhase::Idle => {
+                self.requested = true;
+                self.schedule_if_ready()
+            }
+            ResyncPhase::Scheduled => false,
+            ResyncPhase::Running => {
+                self.requested = true;
+                false
+            }
+        }
+    }
+
+    fn runner_started(&mut self) -> bool {
+        if self.phase != ResyncPhase::Scheduled {
+            return false;
+        }
+        if self.local_resizes_in_flight > 0 {
+            self.phase = ResyncPhase::Idle;
+            self.requested = true;
+            return false;
+        }
+        self.phase = ResyncPhase::Running;
+        true
+    }
+
+    fn result_is_current(&mut self) -> bool {
+        debug_assert_eq!(self.phase, ResyncPhase::Running);
+        if self.requested || self.local_resizes_in_flight > 0 {
+            self.requested = true;
+            false
+        } else {
+            true
+        }
+    }
+
+    fn runner_finished(&mut self) -> bool {
+        debug_assert_eq!(self.phase, ResyncPhase::Running);
+        self.phase = ResyncPhase::Idle;
+        self.schedule_if_ready()
+    }
+
+    fn schedule_if_ready(&mut self) -> bool {
+        if self.phase == ResyncPhase::Idle && self.requested && self.local_resizes_in_flight == 0 {
+            self.requested = false;
+            self.phase = ResyncPhase::Scheduled;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 pub struct ClientInner {
     pub client: Client,
     pub local_domain_id: DomainId,
@@ -26,6 +112,7 @@ pub struct ClientInner {
     remote_to_local_tab: Mutex<HashMap<TabId, TabId>>,
     remote_to_local_pane: Mutex<HashMap<PaneId, PaneId>>,
     pub focused_remote_pane_id: Mutex<Option<PaneId>>,
+    resync: Mutex<ResyncState>,
 }
 
 impl ClientInner {
@@ -246,7 +333,32 @@ impl ClientInner {
             remote_to_local_tab: Mutex::new(HashMap::new()),
             remote_to_local_pane: Mutex::new(HashMap::new()),
             focused_remote_pane_id: Mutex::new(None),
+            resync: Mutex::new(ResyncState::default()),
         }
+    }
+
+    pub(crate) fn local_resize_started(&self) {
+        self.resync.lock().unwrap().local_resize_started();
+    }
+
+    pub(crate) fn local_resize_finished(&self) -> bool {
+        self.resync.lock().unwrap().local_resize_finished()
+    }
+
+    fn request_resync(&self) -> bool {
+        self.resync.lock().unwrap().request()
+    }
+
+    fn resync_runner_started(&self) -> bool {
+        self.resync.lock().unwrap().runner_started()
+    }
+
+    fn resync_result_is_current(&self) -> bool {
+        self.resync.lock().unwrap().result_is_current()
+    }
+
+    fn resync_runner_finished(&self) -> bool {
+        self.resync.lock().unwrap().runner_finished()
     }
 }
 
@@ -511,6 +623,44 @@ impl ClientDomain {
             Self::process_pane_list(inner, panes, None)?;
         }
         Ok(())
+    }
+
+    pub(crate) fn schedule_resync(&self) {
+        if let Some(inner) = self.inner() {
+            if inner.request_resync() {
+                Self::spawn_resync_runner(inner);
+            }
+        }
+    }
+
+    pub(crate) fn spawn_resync_runner(inner: Arc<ClientInner>) {
+        promise::spawn::spawn_into_main_thread(async move {
+            loop {
+                if !inner.resync_runner_started() {
+                    return Ok(());
+                }
+
+                let result: anyhow::Result<()> = async {
+                    let panes = inner.client.list_panes().await?;
+                    if inner.resync_result_is_current() {
+                        Self::process_pane_list(Arc::clone(&inner), panes, None)?;
+                    }
+                    Ok(())
+                }
+                .await;
+
+                let rerun = inner.resync_runner_finished();
+                match (result, rerun) {
+                    (Ok(()), false) => return Ok(()),
+                    (Ok(()), true) => {}
+                    (Err(err), false) => return Err(err),
+                    (Err(err), true) => {
+                        log::error!("resync failed while another resync was pending: {err:#}");
+                    }
+                }
+            }
+        })
+        .detach();
     }
 
     pub fn process_remote_window_title_change(&self, remote_window_id: WindowId, title: String) {
@@ -1107,5 +1257,94 @@ impl Domain for ClientDomain {
         } else {
             DomainState::Detached
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{ResyncPhase, ResyncState};
+
+    #[test]
+    fn resync_request_waits_for_all_local_resizes() {
+        let mut state = ResyncState::default();
+        state.local_resize_started();
+        state.local_resize_started();
+
+        assert!(!state.request());
+        assert!(!state.local_resize_finished());
+        assert_eq!(state.phase, ResyncPhase::Idle);
+        assert!(state.local_resize_finished());
+        assert_eq!(state.phase, ResyncPhase::Scheduled);
+    }
+
+    #[test]
+    fn repeated_resync_requests_coalesce() {
+        let mut state = ResyncState::default();
+        state.local_resize_started();
+
+        assert!(!state.request());
+        assert!(!state.request());
+        assert!(!state.request());
+        assert!(state.local_resize_finished());
+        assert!(!state.request());
+        assert!(state.runner_started());
+        assert!(!state.runner_finished());
+    }
+
+    #[test]
+    fn request_during_resync_discards_result_and_reruns_once() {
+        let mut state = ResyncState::default();
+        assert!(state.request());
+        assert!(state.runner_started());
+
+        assert!(!state.request());
+        assert!(!state.request());
+        assert!(!state.result_is_current());
+        assert!(state.runner_finished());
+
+        assert!(state.runner_started());
+        assert!(state.result_is_current());
+        assert!(!state.runner_finished());
+    }
+
+    #[test]
+    fn only_one_resync_runner_can_be_active() {
+        let mut state = ResyncState::default();
+        assert!(state.request());
+        assert!(state.runner_started());
+
+        assert!(!state.runner_started());
+        assert!(!state.request());
+        assert!(!state.runner_started());
+        assert!(state.runner_finished());
+        assert!(state.runner_started());
+    }
+
+    #[test]
+    fn finishing_failed_resync_does_not_wedge_pending_work() {
+        let mut state = ResyncState::default();
+        assert!(state.request());
+        assert!(state.runner_started());
+        assert!(!state.request());
+
+        // The runner uses the same completion transition on success and error.
+        assert!(state.runner_finished());
+        assert!(state.runner_started());
+        assert!(!state.runner_finished());
+
+        assert!(state.request());
+        assert!(state.runner_started());
+    }
+
+    #[test]
+    fn resize_start_racing_scheduled_runner_defers_it() {
+        let mut state = ResyncState::default();
+        assert!(state.request());
+        state.local_resize_started();
+
+        assert!(!state.runner_started());
+        assert_eq!(state.phase, ResyncPhase::Idle);
+        assert!(state.local_resize_finished());
+        assert!(state.runner_started());
     }
 }

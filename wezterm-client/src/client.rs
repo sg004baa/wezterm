@@ -358,7 +358,8 @@ fn process_unilateral(
                             anyhow!("domain {} is not a ClientDomain instance", local_domain_id)
                         })?;
 
-                client_domain.resync().await
+                client_domain.schedule_resync();
+                anyhow::Result::<()>::Ok(())
             })
             .detach();
 

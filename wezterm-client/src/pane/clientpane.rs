@@ -1,4 +1,4 @@
-use crate::domain::ClientInner;
+use crate::domain::{ClientDomain, ClientInner};
 use crate::pane::mousestate::MouseState;
 use crate::pane::renderable::{hydrate_lines, RenderableInner, RenderableState};
 use anyhow::bail;
@@ -409,15 +409,20 @@ impl Pane for ClientPane {
             let client = Arc::clone(&self.client);
             let remote_pane_id = self.remote_pane_id;
             let remote_tab_id = self.remote_tab_id;
+            client.local_resize_started();
             promise::spawn::spawn(async move {
-                client
+                let result = client
                     .client
                     .resize(Resize {
                         containing_tab_id: remote_tab_id,
                         pane_id: remote_pane_id,
                         size,
                     })
-                    .await
+                    .await;
+                if client.local_resize_finished() {
+                    ClientDomain::spawn_resync_runner(Arc::clone(&client));
+                }
+                result
             })
             .detach();
             inner.update_last_send();
