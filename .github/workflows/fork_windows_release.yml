@@ -1,0 +1,116 @@
+name: fork_windows_release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing v* tag to publish"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    if: github.repository == 'sg004baa/wezterm'
+    runs-on: windows-2022
+    env:
+      CARGO_INCREMENTAL: "0"
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+      RUSTUP_WINDOWS_PATH_ADD_BIN: "1"
+
+    steps:
+      - name: "Validate release tag"
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v.+$') {
+            throw "Release tag must match v*: $env:RELEASE_TAG"
+          }
+      - name: "Checkout release tag"
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          submodules: "recursive"
+      - name: "Install Rust"
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: "x86_64-pc-windows-msvc"
+      - name: "Compile with sccache"
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: "Cache Rust Dependencies"
+        uses: actions/cache@v4
+        id: cache-cargo-vendor
+        with:
+          path: |
+            vendor
+            .cargo/config
+          key: "cargo-deps-${{ hashFiles('**/Cargo.lock') }}"
+      - name: "Vendor dependencies"
+        if: steps.cache-cargo-vendor.outputs.cache-hit != 'true'
+        shell: bash
+        run: "cargo vendor --locked --versioned-dirs >> .cargo/config"
+      - name: "Build release executables"
+        shell: cmd
+        run: |
+          PATH C:\Strawberry\perl\bin;%PATH%
+          cargo build --release -p wezterm -p wezterm-gui -p wezterm-mux-server
+      - name: "Install cargo-nextest"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: "nextest"
+      - name: "Test"
+        shell: cmd
+        run: |
+          PATH C:\Strawberry\perl\bin;%PATH%
+          cargo nextest run --all --no-fail-fast
+      - name: "Upload release executables"
+        uses: actions/upload-artifact@v4
+        with:
+          name: "fork-windows-executables"
+          if-no-files-found: error
+          path: |
+            target/release/wezterm.exe
+            target/release/wezterm-gui.exe
+            target/release/wezterm-mux-server.exe
+
+  publish:
+    if: github.repository == 'sg004baa/wezterm'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: "Download release executables"
+        uses: actions/download-artifact@v4
+        with:
+          name: "fork-windows-executables"
+          path: release-assets
+      - name: "Create release if needed"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes --title "$RELEASE_TAG"
+          fi
+      - name: "Upload release assets"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            release-assets/wezterm.exe \
+            release-assets/wezterm-gui.exe \
+            release-assets/wezterm-mux-server.exe \
+            --clobber
