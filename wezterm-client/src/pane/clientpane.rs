@@ -1,4 +1,4 @@
-use crate::domain::{ClientDomain, ClientInner};
+use crate::domain::{ClientDomain, ClientInner, PaneResizeOrigin};
 use crate::pane::mousestate::MouseState;
 use crate::pane::renderable::{hydrate_lines, RenderableInner, RenderableState};
 use anyhow::bail;
@@ -406,26 +406,30 @@ impl Pane for ClientPane {
             // Invalidate any cached rows on a resize
             inner.make_all_stale();
 
-            let client = Arc::clone(&self.client);
-            let remote_pane_id = self.remote_pane_id;
-            let remote_tab_id = self.remote_tab_id;
-            client.local_resize_started();
-            promise::spawn::spawn(async move {
-                let result = client
-                    .client
-                    .resize(Resize {
-                        containing_tab_id: remote_tab_id,
-                        pane_id: remote_pane_id,
-                        size,
-                    })
-                    .await;
-                if client.local_resize_finished() {
-                    ClientDomain::spawn_resync_runner(Arc::clone(&client));
-                }
-                result
-            })
-            .detach();
-            inner.update_last_send();
+            // A pane tree snapshot is authoritative; applying it must not feed
+            // the same dimensions back to the server as a client resize.
+            if self.client.pane_resize_origin() == PaneResizeOrigin::Local {
+                let client = Arc::clone(&self.client);
+                let remote_pane_id = self.remote_pane_id;
+                let remote_tab_id = self.remote_tab_id;
+                client.local_resize_started();
+                promise::spawn::spawn(async move {
+                    let result = client
+                        .client
+                        .resize(Resize {
+                            containing_tab_id: remote_tab_id,
+                            pane_id: remote_pane_id,
+                            size,
+                        })
+                        .await;
+                    if client.local_resize_finished() {
+                        ClientDomain::spawn_resync_runner(Arc::clone(&client));
+                    }
+                    result
+                })
+                .detach();
+                inner.update_last_send();
+            }
         }
         Ok(())
     }
