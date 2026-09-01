@@ -103,6 +103,59 @@ impl ResyncState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PaneResizeOrigin {
+    Local,
+    RemotePaneTree,
+}
+
+#[derive(Debug, Default)]
+struct RemotePaneTreeApplicationState {
+    depth: usize,
+}
+
+impl RemotePaneTreeApplicationState {
+    fn enter(&mut self) {
+        self.depth = self
+            .depth
+            .checked_add(1)
+            .expect("remote pane tree application depth overflow");
+    }
+
+    fn exit(&mut self) {
+        assert!(
+            self.depth > 0,
+            "remote pane tree application scope exited without entering"
+        );
+        self.depth -= 1;
+    }
+
+    fn pane_resize_origin(&self) -> PaneResizeOrigin {
+        if self.depth == 0 {
+            PaneResizeOrigin::Local
+        } else {
+            PaneResizeOrigin::RemotePaneTree
+        }
+    }
+}
+
+struct RemotePaneTreeApplicationGuard<'a> {
+    state: &'a Mutex<RemotePaneTreeApplicationState>,
+}
+
+impl<'a> RemotePaneTreeApplicationGuard<'a> {
+    fn enter(state: &'a Mutex<RemotePaneTreeApplicationState>) -> Self {
+        state.lock().unwrap().enter();
+        Self { state }
+    }
+}
+
+impl Drop for RemotePaneTreeApplicationGuard<'_> {
+    fn drop(&mut self) {
+        self.state.lock().unwrap().exit();
+    }
+}
+
 pub struct ClientInner {
     pub client: Client,
     pub local_domain_id: DomainId,
@@ -113,6 +166,7 @@ pub struct ClientInner {
     remote_to_local_pane: Mutex<HashMap<PaneId, PaneId>>,
     pub focused_remote_pane_id: Mutex<Option<PaneId>>,
     resync: Mutex<ResyncState>,
+    remote_pane_tree_application: Mutex<RemotePaneTreeApplicationState>,
 }
 
 impl ClientInner {
@@ -334,6 +388,7 @@ impl ClientInner {
             remote_to_local_pane: Mutex::new(HashMap::new()),
             focused_remote_pane_id: Mutex::new(None),
             resync: Mutex::new(ResyncState::default()),
+            remote_pane_tree_application: Mutex::new(RemotePaneTreeApplicationState::default()),
         }
     }
 
@@ -343,6 +398,17 @@ impl ClientInner {
 
     pub(crate) fn local_resize_finished(&self) -> bool {
         self.resync.lock().unwrap().local_resize_finished()
+    }
+
+    fn begin_remote_pane_tree_application(&self) -> RemotePaneTreeApplicationGuard<'_> {
+        RemotePaneTreeApplicationGuard::enter(&self.remote_pane_tree_application)
+    }
+
+    pub(crate) fn pane_resize_origin(&self) -> PaneResizeOrigin {
+        self.remote_pane_tree_application
+            .lock()
+            .unwrap()
+            .pane_resize_origin()
     }
 
     fn request_resync(&self) -> bool {
@@ -711,6 +777,7 @@ impl ClientDomain {
         panes: ListPanesResponse,
         mut primary_window_id: Option<WindowId>,
     ) -> anyhow::Result<()> {
+        let _remote_pane_tree_application = inner.begin_remote_pane_tree_application();
         let mux = Mux::get();
         log::debug!(
             "domain {}: ListPanes result {:#?}",
@@ -1262,7 +1329,61 @@ impl Domain for ClientDomain {
 
 #[cfg(test)]
 mod test {
-    use super::{ResyncPhase, ResyncState};
+    use super::{
+        PaneResizeOrigin, RemotePaneTreeApplicationGuard, RemotePaneTreeApplicationState,
+        ResyncPhase, ResyncState,
+    };
+    use std::sync::Mutex;
+
+    #[test]
+    fn remote_pane_tree_application_scope_enters_and_exits() {
+        let state = Mutex::new(RemotePaneTreeApplicationState::default());
+        assert_eq!(state.lock().unwrap().depth, 0);
+
+        let result: Result<(), ()> = (|| {
+            let _guard = RemotePaneTreeApplicationGuard::enter(&state);
+            assert_eq!(state.lock().unwrap().depth, 1);
+            Err(())
+        })();
+
+        assert_eq!(result, Err(()));
+        assert_eq!(state.lock().unwrap().depth, 0);
+    }
+
+    #[test]
+    fn remote_pane_tree_application_scope_is_nesting_safe() {
+        let state = Mutex::new(RemotePaneTreeApplicationState::default());
+        let _outer = RemotePaneTreeApplicationGuard::enter(&state);
+        assert_eq!(state.lock().unwrap().depth, 1);
+
+        {
+            let _inner = RemotePaneTreeApplicationGuard::enter(&state);
+            assert_eq!(state.lock().unwrap().depth, 2);
+        }
+
+        assert_eq!(state.lock().unwrap().depth, 1);
+    }
+
+    #[test]
+    fn remote_pane_tree_application_classifies_resizes() {
+        let state = Mutex::new(RemotePaneTreeApplicationState::default());
+        assert_eq!(
+            state.lock().unwrap().pane_resize_origin(),
+            PaneResizeOrigin::Local
+        );
+
+        let guard = RemotePaneTreeApplicationGuard::enter(&state);
+        assert_eq!(
+            state.lock().unwrap().pane_resize_origin(),
+            PaneResizeOrigin::RemotePaneTree
+        );
+        drop(guard);
+
+        assert_eq!(
+            state.lock().unwrap().pane_resize_origin(),
+            PaneResizeOrigin::Local
+        );
+    }
 
     #[test]
     fn resync_request_waits_for_all_local_resizes() {
