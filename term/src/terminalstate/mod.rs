@@ -1,6 +1,7 @@
 // The range_plus_one lint can't see when the LHS is not compatible with
 // and inclusive range
 #![allow(clippy::range_plus_one)]
+
 use super::*;
 use crate::color::{ColorPalette, RgbColor};
 use crate::config::{BidiMode, NewlineCanon};
@@ -2073,14 +2074,16 @@ impl TerminalState {
                 right,
                 ..
             } => {
-                let checksum = self.checksum_rectangle(
-                    left.as_zero_based(),
-                    top.as_zero_based(),
-                    right.as_zero_based(),
-                    bottom.as_zero_based(),
-                );
-                write!(self.writer, "\x1bP{}!~{:04x}\x1b\\", request_id, checksum).ok();
-                self.writer.flush().ok();
+                if self.config.enable_checksum_rectangular_area() {
+                    let checksum = self.checksum_rectangle(
+                        left.as_zero_based(),
+                        top.as_zero_based(),
+                        right.as_zero_based(),
+                        bottom.as_zero_based(),
+                    );
+                    write!(self.writer, "\x1bP{}!~{:04x}\x1b\\", request_id, checksum).ok();
+                    self.writer.flush().ok();
+                }
             }
             Window::ResizeWindowCells { .. } => {
                 // We don't allow the application to change the window size; that's

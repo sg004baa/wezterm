@@ -582,7 +582,8 @@ impl Modal for CommandPalette {
             .fonts
             .command_palette_font()
             .expect("to resolve char selection font");
-        let metrics = RenderMetrics::with_font_metrics(&font.metrics());
+        let metrics = RenderMetrics::with_font_metrics(&font.metrics())
+            .scale_line_height(term_window.config.command_palette_line_height);
 
         let inner_h =
             crate::termwindow::floating_container::resolved_inner_content_pixels(term_window);
