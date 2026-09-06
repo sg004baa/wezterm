@@ -100,8 +100,7 @@ jobs:
       - name: "Install cargo-nextest"
         uses: taiki-e/install-action@v2
         with:
-          crate: "cargo-nextest"
-          cache-key: "ubuntu26.04"
+          tool: "nextest"
       - name: "Test"
         shell: bash
         run: "cargo nextest run --all --no-fail-fast"
