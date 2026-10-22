@@ -22,6 +22,10 @@ usually the best available version.
 As features stabilize some brief notes about them will accumulate here.
 
 #### Changed
+* Fork workflow maintenance: removed generated tag-release and Pages-validation
+  workflows. Continuous build and issue-lock workflows are disabled in the fork's
+  Actions settings; their YAML files remain unchanged.
+
 * fonts: Default dim/bold text now looks more contrasting, see #8049 for examples.
   Thanks to @bfoersterling (testing) & @hphng for his first OSS contribution! #8097
 * DECRQCRA is now disabled by default to prevent silent screen scraping.
