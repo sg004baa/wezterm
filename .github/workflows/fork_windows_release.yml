@@ -20,7 +20,7 @@ env:
 jobs:
   build:
     if: github.repository == 'sg004baa/wezterm'
-    runs-on: windows-2022
+    runs-on: windows-2025
     env:
       CARGO_INCREMENTAL: "0"
       # Cargo 1.100's per-crate paths can exceed Windows' command-line limit.
