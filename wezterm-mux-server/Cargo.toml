@@ -28,7 +28,7 @@ wezterm-gui-subcommands.workspace = true
 wezterm-term.workspace = true
 
 [target."cfg(windows)".dependencies]
-winapi = { workspace=true, features = [ "winuser" ]}
+winapi = { workspace=true, features = ["consoleapi", "wincon", "winuser"]}
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource.workspace = true
