@@ -23,6 +23,9 @@ jobs:
     runs-on: windows-2022
     env:
       CARGO_INCREMENTAL: "0"
+      # Cargo 1.100's per-crate paths can exceed Windows' command-line limit.
+      # Shorten intermediates without changing target/release artifact paths.
+      CARGO_BUILD_BUILD_DIR: 'D:\b'
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: "sccache"
       RUSTUP_WINDOWS_PATH_ADD_BIN: "1"

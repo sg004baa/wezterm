@@ -404,10 +404,9 @@ rustup default {toolchain}
                     params=params,
                 ),
             ]
-        if cache and self.name != "windows":
-            steps.append(SccacheStep(name="Compile with sccache"))
         if cache:
             steps += [
+                SccacheStep(name="Compile with sccache"),
                 # Cache vendored dependencies
                 CacheStep(
                     name="Cache Rust Dependencies",
@@ -661,15 +660,15 @@ rustup default {toolchain}
 
     def global_env(self):
         self.env["CARGO_INCREMENTAL"] = "0"
-        # sccache can exceed the Windows process command-line length limit.
-        if self.name != "windows":
-            self.env["SCCACHE_GHA_ENABLED"] = "true"
-            self.env["RUSTC_WRAPPER"] = "sccache"
+        self.env["SCCACHE_GHA_ENABLED"] = "true"
+        self.env["RUSTC_WRAPPER"] = "sccache"
         if "macos" in self.name:
             self.env["MACOSX_DEPLOYMENT_TARGET"] = "10.12"
         if "alpine" in self.name:
             self.env["RUSTFLAGS"] = "-C target-feature=-crt-static"
         if "win" in self.name:
+            # Keep Cargo 1.100's per-crate paths below Windows' command-line limit.
+            self.env["CARGO_BUILD_BUILD_DIR"] = "D:/b"
             self.env["RUSTUP_WINDOWS_PATH_ADD_BIN"] = "1"
         return
 
