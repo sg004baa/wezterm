@@ -47,7 +47,7 @@ struct Opt {
     config_override: Vec<(String, String)>,
 
     /// Detach from the foreground and become a background process
-    #[arg(long = "daemonize", visible_alias = "daemon")]
+    #[arg(long = "daemonize")]
     daemonize: bool,
 
     #[cfg(windows)]
