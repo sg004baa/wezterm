@@ -1,3 +1,6 @@
+// Prevent Windows from allocating a console before we can parse the arguments.
+#![cfg_attr(not(test), windows_subsystem = "windows")]
+
 use clap::*;
 use config::configuration;
 use mux::activity::Activity;
@@ -44,8 +47,12 @@ struct Opt {
     config_override: Vec<(String, String)>,
 
     /// Detach from the foreground and become a background process
-    #[arg(long = "daemonize")]
+    #[arg(long = "daemonize", visible_alias = "daemon")]
     daemonize: bool,
+
+    #[cfg(windows)]
+    #[arg(long, hide = true)]
+    daemon_child: bool,
 
     /// Specify the current working directory for the initially
     /// spawned program
@@ -79,7 +86,21 @@ fn run() -> anyhow::Result<()> {
     config::designate_this_as_the_main_thread();
     let _saver = umask::UmaskSaver::new();
 
+    #[cfg(not(windows))]
     let opts = Opt::parse();
+
+    #[cfg(windows)]
+    let opts = {
+        let opts = Opt::try_parse();
+        if !matches!(&opts, Ok(opts) if opts.daemon_child) {
+            // Preserve console output when launched from an existing terminal,
+            // including help and argument errors. This never creates a console.
+            unsafe {
+                winapi::um::wincon::AttachConsole(winapi::um::wincon::ATTACH_PARENT_PROCESS);
+            }
+        }
+        opts.unwrap_or_else(|err| err.exit())
+    };
 
     #[cfg(unix)]
     {
@@ -135,6 +156,9 @@ fn run() -> anyhow::Result<()> {
                 cmd.arg(&fd.to_string());
             }
         }
+        #[cfg(windows)]
+        cmd.arg("--daemon-child");
+
         if opts.skip_config {
             cmd.arg("-n");
         }
@@ -164,8 +188,7 @@ fn run() -> anyhow::Result<()> {
             cmd.stderr(config.daemon_options.open_stderr()?);
 
             cmd.creation_flags(winapi::um::winbase::DETACHED_PROCESS);
-            let child = cmd.spawn();
-            drop(child);
+            drop(cmd.spawn()?);
             return Ok(());
         }
 
