@@ -110,9 +110,8 @@ jobs:
           $failed = @()
           try {
             $text = [IO.File]::ReadAllText($log) -replace "`e\[[\d;]*[A-Za-z]", ""
-            $failed = [regex]::Matches($text, 'command\s+`?''([^'']+\.exe)''\s+--list') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+            $failed = [regex]::Matches($text, "command '([^']+\.exe)' --list") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
           } catch { Note "Could not parse nextest output: $_" }
-          if (-not $failed) { Note "No failed executable paths extracted; inspect nextest.log for the original error." }
           $dumpbin = Get-Command dumpbin.exe -ErrorAction SilentlyContinue
           $llvm = Get-Command llvm-readobj.exe -ErrorAction SilentlyContinue
           if (-not $dumpbin) {
