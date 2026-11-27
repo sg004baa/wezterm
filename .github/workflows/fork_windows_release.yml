@@ -167,7 +167,7 @@ jobs:
           name: windows-test-diagnostics
           path: ${{ steps.test.outputs.dir }}
           if-no-files-found: warn
-      - name: "Upload release executables"
+      - name: "Upload Windows release files"
         uses: actions/upload-artifact@v4
         with:
           name: "fork-windows-executables"
@@ -176,6 +176,8 @@ jobs:
             target/release/wezterm.exe
             target/release/wezterm-gui.exe
             target/release/wezterm-mux-server.exe
+            target/release/conpty.dll
+            target/release/OpenConsole.exe
 
   publish:
     if: github.repository == 'sg004baa/wezterm'
@@ -185,7 +187,7 @@ jobs:
       contents: write
 
     steps:
-      - name: "Download release executables"
+      - name: "Download Windows release files"
         uses: actions/download-artifact@v4
         with:
           name: "fork-windows-executables"
@@ -209,4 +211,6 @@ jobs:
             release-assets/wezterm.exe \
             release-assets/wezterm-gui.exe \
             release-assets/wezterm-mux-server.exe \
+            release-assets/conpty.dll \
+            release-assets/OpenConsole.exe \
             --clobber
