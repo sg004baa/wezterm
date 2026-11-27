@@ -96,7 +96,9 @@ fn run() -> anyhow::Result<()> {
             // Preserve console output when launched from an existing terminal,
             // including help and argument errors. This never creates a console.
             unsafe {
-                winapi::um::wincon::AttachConsole(winapi::um::wincon::ATTACH_PARENT_PROCESS);
+                windows_sys::Win32::System::Console::AttachConsole(
+                    windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS,
+                );
             }
         }
         opts.unwrap_or_else(|err| err.exit())
@@ -184,10 +186,11 @@ fn run() -> anyhow::Result<()> {
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
+            use windows_sys::Win32::System::Threading::DETACHED_PROCESS;
             cmd.stdout(config.daemon_options.open_stdout()?);
             cmd.stderr(config.daemon_options.open_stderr()?);
 
-            cmd.creation_flags(winapi::um::winbase::DETACHED_PROCESS);
+            cmd.creation_flags(DETACHED_PROCESS);
             drop(cmd.spawn()?);
             return Ok(());
         }

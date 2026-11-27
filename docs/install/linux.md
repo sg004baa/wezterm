@@ -101,9 +101,12 @@ hide:
 
     ```console
     $ curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg
-    $ echo 'deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list
+    $ printf '%s\n' 'Types: deb' 'URIs: https://apt.fury.io/wez/' 'Suites: *' 'Components: *' 'Signed-By: /usr/share/keyrings/wezterm-fury.gpg' | sudo tee /etc/apt/sources.list.d/wezterm.sources
     $ sudo chmod 644 /usr/share/keyrings/wezterm-fury.gpg
     ```
+
+    If you previously configured the repo using `/etc/apt/sources.list.d/wezterm.list`,
+    remove that file after creating `wezterm.sources` to avoid duplicate entries.
 
     Update your dependencies:
 
@@ -437,7 +440,7 @@ hide:
 
     !!! note
         `wezterm-nightly-bin` is a live ebuild, it will pull the latest
-        nightly binary everytime it's merged. Also, it's a binary
+        nightly binary every time it's merged. Also, it's a binary
         package and therefore not built from source.
 
 === "Raw"

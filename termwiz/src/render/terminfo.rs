@@ -385,6 +385,19 @@ impl TerminfoRenderer {
                         out.write_all(buf.as_slice())?;
                     }
                 }
+                Change::ClearLine(color) => {
+                    let defaults = CellAttributes::default().set_background(*color).clone();
+                    if self.current_attr != defaults {
+                        self.pending_attr = Some(defaults);
+                        self.flush_pending_attr(out)?;
+                    }
+                    self.pending_attr = None;
+                    write!(
+                        out,
+                        "{}",
+                        CSI::Edit(Edit::EraseInLine(EraseInLine::EraseLine))
+                    )?;
+                }
                 Change::ClearToEndOfLine(color) => {
                     // ClearScreen implicitly resets all to default
                     let defaults = CellAttributes::default().set_background(*color).clone();
@@ -792,7 +805,7 @@ mod test {
     }
 
     impl UnixTty for FakeTty {
-        fn get_size(&mut self) -> Result<winsize> {
+        fn get_size(&self) -> Result<winsize> {
             Ok(self.size.clone())
         }
         fn set_size(&mut self, size: winsize) -> Result<()> {
@@ -873,7 +886,7 @@ mod test {
             self.renderer.render_to(changes, &mut self.write)
         }
 
-        fn get_screen_size(&mut self) -> Result<ScreenSize> {
+        fn get_screen_size(&self) -> Result<ScreenSize> {
             let size = self.write.get_size()?;
             Ok(ScreenSize {
                 rows: cast(size.ws_row)?,
@@ -1010,6 +1023,27 @@ mod test {
         );
 
         assert_eq!(out.renderer.current_attr, CellAttributes::default());
+    }
+
+    #[test]
+    fn clear_line() {
+        let mut out = FakeTerm::new(xterm_terminfo());
+        out.render(&[Change::ClearLine(AnsiColor::Maroon.into())])
+            .unwrap();
+
+        assert_eq!(
+            out.parse(),
+            vec![
+                Action::CSI(CSI::Sgr(Sgr::Background(AnsiColor::Maroon.into()))),
+                Action::CSI(CSI::Edit(Edit::EraseInLine(EraseInLine::EraseLine))),
+            ]
+        );
+        assert_eq!(
+            out.renderer.current_attr,
+            CellAttributes::default()
+                .set_background(AnsiColor::Maroon)
+                .clone()
+        );
     }
 
     #[test]

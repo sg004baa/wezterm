@@ -588,7 +588,7 @@ impl XWindowInner {
                         property: conn.atom_xdndtypelist,
                         r#type: xcb::x::ATOM_ATOM,
                         long_offset: 0,
-                        long_length: u32::max_value(),
+                        long_length: u32::MAX,
                     }) {
                         Ok(prop) => prop.value::<Atom>().to_vec(),
                         Err(err) => {
@@ -926,7 +926,12 @@ impl XWindowInner {
             conn.send_request_no_reply(&xcb::x::SetSelectionOwner {
                 owner: xcb::x::Window::none(),
                 selection,
-                time: self.copy_and_paste.time,
+                // We use CURRENT_TIME rather than self.copy_and_paste.time here, because that field
+                // only advances on key/button events on *this* window, so for a window that hasn't
+                // been interacted with recently it lags behind the selection's lastTimeChanged.
+                // The X server ignores SetSelectionOwner with time before lastTimeChanged, so
+                // clipboard updates without explicit interaction (OSC 52) would never be accepted.
+                time: xcb::x::CURRENT_TIME,
             })?;
         } else if we_own_it {
             log::trace!(
@@ -937,7 +942,8 @@ impl XWindowInner {
             conn.send_request_no_reply(&xcb::x::SetSelectionOwner {
                 owner: self.window_id,
                 selection,
-                time: self.copy_and_paste.time,
+                // See note about CURRENT_TIME in the other branch above.
+                time: xcb::x::CURRENT_TIME,
             })?;
         } else {
             log::trace!(
@@ -1101,7 +1107,7 @@ impl XWindowInner {
                 property: selection.property(),
                 r#type: selection.target(),
                 long_offset: 0,
-                long_length: u32::max_value(),
+                long_length: u32::MAX,
             }) {
                 Ok(prop) => {
                     if let Some(mut promise) = self.copy_and_paste.request_mut(clipboard).take() {
@@ -1143,7 +1149,7 @@ impl XWindowInner {
                     property: selection.property(),
                     r#type: selection.target(),
                     long_offset: 0,
-                    long_length: u32::max_value(),
+                    long_length: u32::MAX,
                 }) {
                     Ok(prop) => {
                         if selection.target() == conn.atom_utf8_string {

@@ -38,25 +38,32 @@ use crate::terminalstate::kitty::*;
 
 lazy_static::lazy_static! {
     static ref DB: Database = {
-        let data = include_bytes!("../../../termwiz/data/wezterm");
+        let data = include_bytes!("../../../termwiz/data/w/wezterm");
         Database::from_buffer(&data[..]).unwrap()
     };
 }
 
+/// Tracks the horizontal tab stops for a terminal screen.
+/// Tab stops are stored as a boolean vector, one entry per column.
 pub(crate) struct TabStop {
     tabs: Vec<bool>,
     tab_width: usize,
 }
 
+/// A character set selectable through the DEC SCS escape sequences.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CharSet {
+pub enum CharSet {
+    /// The US ASCII character set (`B`).
     Ascii,
+    /// The United Kingdom character set (`A`).
     Uk,
+    /// DEC Special Graphics / line drawing (`0`).
     DecLineDrawing,
 }
 
+/// The mouse reporting encoding negotiated through DEC private mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MouseEncoding {
+pub enum MouseEncoding {
     X10,
     Utf8,
     SGR,
@@ -265,6 +272,9 @@ pub struct TerminalState {
     /// If true, writing a character inserts a new cell
     insert: bool,
 
+    /// When set, received chars auto-wrap to the next line when the cursor reaches the right border.
+    /// Otherwise received chars continuously replace the last char on the right.
+    /// note: This is set by default, because it's more useful this way.
     /// https://vt100.net/docs/vt510-rm/DECAWM.html
     dec_auto_wrap: bool,
 
@@ -282,6 +292,9 @@ pub struct TerminalState {
 
     /// The scroll region
     top_and_bottom_margins: Range<VisibleRowIndex>,
+    /// The inner horizontal region between DECSLRM left/right margins.
+    /// `start` is the left margin column, `end` is one past the right margin column.
+    /// Only effective when `left_and_right_margin_mode` is enabled.
     left_and_right_margins: Range<usize>,
     left_and_right_margin_mode: bool,
 
@@ -753,8 +766,114 @@ impl TerminalState {
         self.mouse_tracking || self.button_event_mouse || self.any_event_mouse
     }
 
+    /// Returns true if the alternate screen (secondary screen buffer) is currently active.
+    /// This is useful for the hosting GUI application to decide how best
+    /// to handle operations like scrollback that only apply to the primary screen.
     pub fn is_alt_screen_active(&self) -> bool {
         self.screen.is_alt_screen_active()
+    }
+
+    /// Returns true if the associated application has enabled basic mouse
+    /// tracking mode (DEC mode 1000).
+    /// This is useful for the hosting GUI application to decide how best
+    /// to dispatch mouse events to the terminal.
+    pub fn mouse_tracking_enabled(&self) -> bool {
+        self.mouse_tracking
+    }
+
+    /// Returns true if the associated application has enabled button-event mouse
+    /// tracking mode (DEC mode 1002), which reports motion events while a button is held.
+    /// This is useful for the hosting GUI application to decide how best
+    /// to dispatch mouse events to the terminal.
+    pub fn button_event_mouse_enabled(&self) -> bool {
+        self.button_event_mouse
+    }
+
+    /// Returns true if the associated application has enabled any-event mouse
+    /// tracking mode (DEC mode 1003), which reports all motion events regardless of button state.
+    /// This is useful for the hosting GUI application to decide how best
+    /// to dispatch mouse events to the terminal.
+    pub fn any_event_mouse_enabled(&self) -> bool {
+        self.any_event_mouse
+    }
+
+    /// Returns the current mouse reporting encoding selected by the associated application.
+    pub fn get_mouse_encoding(&self) -> MouseEncoding {
+        self.mouse_encoding
+    }
+
+    /// Returns true if the associated application has enabled focus tracking mode
+    /// (DEC mode 1004), which causes focus-in and focus-out events to be reported.
+    pub fn focus_tracking_enabled(&self) -> bool {
+        self.focus_tracking
+    }
+
+    /// Returns true if the associated application has enabled application cursor keys mode
+    /// (DEC mode 1), which causes cursor keys to send application sequences instead of ANSI ones.
+    pub fn application_cursor_keys_enabled(&self) -> bool {
+        self.application_cursor_keys
+    }
+
+    /// Returns true if the associated application has enabled the special encoding of the numeric
+    /// keypad portion of the keyboard.
+    pub fn application_keypad_enabled(&self) -> bool {
+        self.application_keypad
+    }
+
+    /// Returns true if DECAWM auto-wrap mode (DEC mode 7) is enabled, which causes
+    /// cursor to wrap to next line when it reaches right border.
+    pub fn dec_auto_wrap_enabled(&self) -> bool {
+        self.dec_auto_wrap
+    }
+
+    /// The DECSTBM scroll region, as inclusive-start/exclusive-end visible rows.
+    pub fn get_top_and_bottom_margins(&self) -> Range<VisibleRowIndex> {
+        self.top_and_bottom_margins.clone()
+    }
+
+    /// Returns true if DEC left/right margin mode (DECLRMM) is enabled.
+    /// Use [`Self::get_left_and_right_margins`] to get those margin values.
+    pub fn left_and_right_margin_mode_enabled(&self) -> bool {
+        self.left_and_right_margin_mode
+    }
+
+    /// The inner horizontal region between the DECSLRM margins.
+    /// `start` is the left margin column, `end` is one past the right margin column.
+    /// Only effective when [`Self::left_and_right_margin_mode_enabled`] is true.
+    pub fn get_left_and_right_margins(&self) -> Range<usize> {
+        self.left_and_right_margins.clone()
+    }
+
+    /// Returns true if DEC origin mode (DECOM) is enabled.
+    pub fn dec_origin_mode_enabled(&self) -> bool {
+        self.dec_origin_mode
+    }
+
+    /// Returns true if insert mode (IRM) is enabled.
+    pub fn insert_mode_enabled(&self) -> bool {
+        self.insert
+    }
+
+    /// Returns true if shift-out is enabled: G1 charset is active for display.
+    /// Reset by shift-in, which restores G0 charset.
+    pub fn shift_out_enabled(&self) -> bool {
+        self.shift_out
+    }
+
+    /// The Character Set Selection (SCS) charset designated for G0.
+    pub fn g0_charset(&self) -> CharSet {
+        self.g0_charset
+    }
+
+    /// The Character Set Selection (SCS) charset designated for G1.
+    pub fn g1_charset(&self) -> CharSet {
+        self.g1_charset
+    }
+
+    /// Tab stops by column: `true` where a stop is set.
+    /// Length tracks the screen width, so index is the column.
+    pub fn tab_stops_by_column(&self) -> Vec<bool> {
+        self.tabs.tabs.clone()
     }
 
     /// Returns true if the associated application has enabled
@@ -786,13 +905,17 @@ impl TerminalState {
             }
         }
         if self.focus_tracking {
-            write!(self.writer, "{}{}", CSI, if focused { "I" } else { "O" }).ok();
-            self.writer.flush().ok();
+            self.send_focus_changed(focused);
         }
         self.focused = focused;
         if !focused {
             self.lost_focus_seqno = self.seqno;
         }
+    }
+
+    fn send_focus_changed(&mut self, focused: bool) {
+        write!(self.writer, "{CSI}{}", if focused { "I" } else { "O" }).ok();
+        self.writer.flush().ok();
     }
 
     /// Returns true if there is new output since the terminal
@@ -1807,6 +1930,8 @@ impl TerminalState {
             Mode::SetDecPrivateMode(DecPrivateMode::Code(DecPrivateModeCode::FocusTracking)) => {
                 self.focus_tracking = true;
                 self.last_mouse_move.take();
+                // For compatibility with other terminals, send a focus event right away.
+                self.send_focus_changed(self.focused);
             }
             Mode::ResetDecPrivateMode(DecPrivateMode::Code(DecPrivateModeCode::FocusTracking)) => {
                 self.focus_tracking = false;
@@ -2763,5 +2888,86 @@ impl TerminalState {
             .last()
             .copied()
             .unwrap_or(self.keyboard_encoding)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::sync::mpsc::Receiver;
+    use std::sync::Mutex;
+    use std::time::Duration;
+    use wezterm_escape_parser::Action;
+
+    #[derive(Debug)]
+    struct TestConfig;
+
+    impl crate::TerminalConfiguration for TestConfig {
+        fn color_palette(&self) -> ColorPalette {
+            ColorPalette::default()
+        }
+    }
+
+    /// Captures everything the terminal writes and signals on flush, so a test
+    /// can wait for the writer thread to emit the response before reading it.
+    struct CaptureWriter {
+        buffer: Arc<Mutex<Vec<u8>>>,
+        flushed: Sender<()>,
+    }
+
+    impl Write for CaptureWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.buffer.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            let _ = self.flushed.send(());
+            Ok(())
+        }
+    }
+
+    /// Builds a terminal whose output is captured into `buffer`.
+    fn capture_terminal(buffer: &Arc<Mutex<Vec<u8>>>) -> (TerminalState, Receiver<()>) {
+        let (flushed, flushed_rx) = channel();
+        let writer = Box::new(CaptureWriter {
+            buffer: Arc::clone(buffer),
+            flushed,
+        });
+        let state = TerminalState::new(
+            TerminalSize::default(),
+            Arc::new(TestConfig),
+            "WezTerm",
+            "O_o",
+            writer,
+        );
+        (state, flushed_rx)
+    }
+
+    #[test]
+    fn embedded_terminfo_is_valid() {
+        // Initializing the lazy_static database panics if the embedded
+        // terminfo file is missing or malformed.
+        assert!(DB.raw("Tc").is_some());
+    }
+
+    #[test]
+    fn xt_get_tcap_responds_from_embedded_terminfo() {
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let (mut state, flushed_rx) = capture_terminal(&buffer);
+
+        {
+            let mut performer = performer::Performer::new(&mut state);
+            performer.perform(Action::XtGetTcap(vec!["sitm".to_string()]));
+        }
+
+        // Wait for the writer thread to write and flush the response.
+        flushed_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("terminal did not flush its response");
+
+        let response = String::from_utf8(buffer.lock().unwrap().clone()).unwrap();
+        // 7369746D is hex for "sitm"; 1B5B336D is hex for the SGR italics sequence.
+        assert_eq!(response, "\x1bP1+r7369746D=1B5B336D\x1b\\");
     }
 }

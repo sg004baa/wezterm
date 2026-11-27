@@ -2,6 +2,7 @@ use assert_fs::prelude::*;
 use assert_fs::TempDir;
 use rstest::*;
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::Result as IoResult;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
@@ -16,7 +17,50 @@ use std::os::unix::fs::PermissionsExt;
 const BIN_PATH_STR: &str = "/usr/sbin/sshd";
 
 pub fn sshd_available() -> bool {
-    Path::new(BIN_PATH_STR).exists()
+    static AVAILABLE: LazyLock<bool> = LazyLock::new(probe_sshd);
+    *AVAILABLE
+}
+
+/// Ensures that the system ssh client can talk to our sshd fixture.
+/// If that doesn't work in this environment, none of our tests will
+/// succeed.
+fn probe_sshd() -> bool {
+    if !Path::new(BIN_PATH_STR).exists() {
+        return false;
+    }
+
+    let sshd = match Sshd::spawn(SshdConfig::default()) {
+        Ok(sshd) => sshd,
+        Err(_) => return false,
+    };
+
+    let id_rsa = sshd.tmp.child("id_rsa");
+    let known_hosts = sshd.tmp.child("known_hosts");
+
+    // Authenticate with the system ssh client, not wezterm-ssh, to make a
+    // wezterm-ssh bug show up as a failing test rather than a skipped one.
+    let args: Vec<OsString> = vec![
+        "-p".into(),
+        sshd.port.to_string().into(),
+        "-i".into(),
+        id_rsa.path().into(),
+        "-o".into(),
+        "IdentitiesOnly=yes".into(),
+        "-o".into(),
+        "BatchMode=yes".into(),
+        "-o".into(),
+        "StrictHostKeyChecking=no".into(),
+        "-o".into(),
+        format!("UserKnownHostsFile={}", known_hosts.path().display()).into(),
+        format!("{}@localhost", &*USERNAME).into(),
+        "true".into(),
+    ];
+
+    Command::new("ssh")
+        .args(&args)
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false)
 }
 
 /// Ask the kernel to assign a free port.
@@ -197,6 +241,10 @@ impl SshdConfig {
             .insert("StrictModes".to_string(), Self::yes_value(yes));
     }
 
+    pub fn set_env(&mut self, pair: String) {
+        self.0.entry("SetEnv".to_string()).or_default().push(pair);
+    }
+
     fn yes_value(yes: bool) -> Vec<String> {
         vec![Self::yes_string(yes)]
     }
@@ -294,6 +342,9 @@ impl Sshd {
 
         let sshd_pid_file = tmp.child("sshd.pid");
         config.set_pid_file(sshd_pid_file.path());
+
+        // Prevent user config from interfering with the tests
+        config.set_env(format!("HOME={}", tmp.path().display()));
 
         // Generate $ROOT/sshd_config based on config
         let sshd_config_file = tmp.child("sshd_config");
