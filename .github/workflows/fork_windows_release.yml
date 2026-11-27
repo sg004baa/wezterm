@@ -20,7 +20,7 @@ env:
 jobs:
   build:
     if: github.repository == 'sg004baa/wezterm'
-    runs-on: windows-2022
+    runs-on: windows-2025
     env:
       CARGO_INCREMENTAL: "0"
       # Cargo 1.100's per-crate paths can exceed Windows' command-line limit.
@@ -70,103 +70,10 @@ jobs:
         with:
           tool: "nextest"
       - name: "Test"
-        id: test
-        shell: pwsh
+        shell: cmd
         run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          $env:PATH = "C:\Strawberry\perl\bin;$env:PATH"
-          $dir = Join-Path $env:RUNNER_TEMP ("windows-test-diagnostics-" + [guid]::NewGuid())
-          New-Item -ItemType Directory -Path $dir | Out-Null
-          $started = [DateTime]::UtcNow
-          $started.ToString("o") | Set-Content -Encoding utf8 (Join-Path $dir "started.txt")
-          "dir=$dir" >> $env:GITHUB_OUTPUT
-          "started=$($started.ToString('o'))" >> $env:GITHUB_OUTPUT
-          cargo nextest run --all --no-fail-fast 2>&1 | Tee-Object -FilePath (Join-Path $dir "nextest.log")
-          $code = $LASTEXITCODE
-          exit $code
-      # Collect failure-only diagnostics; each source is best-effort so one failure does not hide the rest.
-      - name: "Collect Windows test diagnostics"
-        if: failure() && steps.test.outcome == 'failure'
-        shell: pwsh
-        timeout-minutes: 3
-        continue-on-error: true
-        env:
-          DIAG_DIR: ${{ steps.test.outputs.dir }}
-          TEST_STARTED: ${{ steps.test.outputs.started }}
-        run: |
-          $ErrorActionPreference = "Continue"
-          $log = Join-Path $env:DIAG_DIR "nextest.log"
-          $report = Join-Path $env:DIAG_DIR "diagnostics.txt"
-          function Note($text) { $text | Add-Content -Encoding utf8 $report }
-          function SafeVersion($label, $command, $commandArgs) {
-            try { $value = & $command @commandArgs 2>&1; Note "$label`: $($value -join ' ')" }
-            catch { Note "$label unavailable: $_" }
-          }
-          SafeVersion "rustc -Vv" "rustc" @("-Vv")
-          SafeVersion "cargo --version" "cargo" @("--version")
-          SafeVersion "cargo nextest --version" "cargo" @("nextest", "--version")
-          try { Note "Windows: $((Get-CimInstance Win32_OperatingSystem).Caption) $([Environment]::OSVersion.Version)" } catch { Note "Windows version unavailable: $_" }
-          Note "Diagnostic-step PATH (not the exact nextest child PATH), characters=$($env:PATH.Length): $env:PATH"
-          $failed = @()
-          try {
-            $text = [IO.File]::ReadAllText($log) -replace "`e\[[\d;]*[A-Za-z]", ""
-            $failed = [regex]::Matches($text, 'command\s+`?''([^'']+\.exe)''\s+--list') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
-          } catch { Note "Could not parse nextest output: $_" }
-          if (-not $failed) { Note "No failed executable paths extracted; inspect nextest.log for the original error." }
-          $dumpbin = Get-Command dumpbin.exe -ErrorAction SilentlyContinue
-          $llvm = Get-Command llvm-readobj.exe -ErrorAction SilentlyContinue
-          if (-not $dumpbin) {
-            try {
-              $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-              if (Test-Path $vswhere) {
-                $vs = & $vswhere -latest -products '*' -find 'VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe' 2>$null | Select-Object -First 1
-                if ($vs) { $dumpbin = Get-Command $vs -ErrorAction Stop }
-              }
-            } catch { Note "vswhere lookup failed: $_" }
-          }
-          if (-not $dumpbin) {
-            $llvmRoots = @("${env:ProgramFiles}\LLVM\bin\llvm-readobj.exe", "${env:ProgramFiles(x86)}\LLVM\bin\llvm-readobj.exe")
-            foreach ($candidate in $llvmRoots) { if ((-not $llvm) -and (Test-Path $candidate)) { $llvm = Get-Command $candidate -ErrorAction SilentlyContinue } }
-          }
-          Note "Dependency tool: $(if ($dumpbin) { $dumpbin.Source } elseif ($llvm) { $llvm.Source } else { 'dumpbin and llvm-readobj unavailable' })"
-          foreach ($path in $failed) {
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Note "Missing failed executable: $path"; continue }
-            try {
-              $file = Get-Item -LiteralPath $path
-              Note "Failed executable: $($file.FullName); bytes=$($file.Length); SHA256=$((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash)"
-              if ($dumpbin) { Note "DEPENDENTS for $path`n$((& $dumpbin.Source /DEPENDENTS $path 2>&1) -join "`n")" }
-              elseif ($llvm) { Note "Imports for $path`n$((& $llvm.Source --coff-imports $path 2>&1) -join "`n")" }
-              else { Note "Dependency listing unavailable for $path" }
-              Note "Direct inherited-environment probe (not the exact nextest environment): $path --list --format terse"
-              $psi = [Diagnostics.ProcessStartInfo]::new()
-              $psi.FileName = $path
-              $psi.Arguments = "--list --format terse"
-              $psi.UseShellExecute = $false
-              $psi.RedirectStandardOutput = $true
-              $psi.RedirectStandardError = $true
-              $process = [Diagnostics.Process]::new()
-              $process.StartInfo = $psi
-              [void]$process.Start()
-              $stdout = $process.StandardOutput.ReadToEndAsync()
-              $stderr = $process.StandardError.ReadToEndAsync()
-              if (-not $process.WaitForExit(30000)) { $process.Kill(); [void]$process.WaitForExit(); Note "Probe timed out after 30 seconds"; continue }
-              $out = $stdout.GetAwaiter().GetResult()
-              $err = $stderr.GetAwaiter().GetResult()
-              Note "Probe exit code: $($process.ExitCode) (hex 0x$('{0:X8}' -f $process.ExitCode))`nstdout:`n$out`nstderr:`n$err"
-            } catch { Note "Executable diagnostics failed for $path`: $_" }
-          }
-          try {
-            $events = Get-WinEvent -FilterHashtable @{ LogName = "Application"; StartTime = [DateTime]::Parse($env:TEST_STARTED).ToLocalTime(); Id = 1000,1001,33,59 } -MaxEvents 30 -ErrorAction Stop
-            if (-not $events) { Note "No matching Application events since test start." }
-            foreach ($event in $events) { Note "Application event: $($event.TimeCreated) ID=$($event.Id) Provider=$($event.ProviderName)`n$($event.FormatDescription())" }
-          } catch { Note "Application event query unavailable or failed: $_" }
-      - name: "Upload Windows test diagnostics"
-        if: failure() && steps.test.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-test-diagnostics
-          path: ${{ steps.test.outputs.dir }}
-          if-no-files-found: warn
+          PATH C:\Strawberry\perl\bin;%PATH%
+          cargo nextest run --all --no-fail-fast
       - name: "Upload Windows release files"
         uses: actions/upload-artifact@v4
         with:
