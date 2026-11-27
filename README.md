@@ -23,6 +23,7 @@ Personal fork of [wezterm/wezterm](https://github.com/wezterm/wezterm).
     - Win32 system backdrop stays visible while window is inactive
     - Scrollbar hit region heights corrected (`ScrollHit::thumb` field semantics)
     - `compute_background_rect_with_scrollbar` padding argument order corrected
+    - Windows releases include `conpty.dll` and `OpenConsole.exe` alongside the WezTerm executables for Kitty graphics in local WSL sessions.
 
 ---
 
