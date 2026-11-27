@@ -2,7 +2,7 @@
 
 Personal fork of [wezterm/wezterm](https://github.com/wezterm/wezterm).
 
-**Upstream base:** `b99b1ca` (upstream `main`, 2026-09-06)
+**Upstream base:** `1026152aa` (upstream `main`, 2026-11-27)
 
 ## Custom modifications
 
