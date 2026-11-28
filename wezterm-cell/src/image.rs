@@ -46,6 +46,42 @@ where
     serializer.serialize_bytes(value)
 }
 
+#[cfg(feature = "use_serde")]
+fn deserialize_bytes<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct BytesVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for BytesVisitor {
+        type Value = Vec<u8>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a byte buffer")
+        }
+
+        fn visit_byte_buf<E>(self, value: Vec<u8>) -> Result<Self::Value, E> {
+            Ok(value)
+        }
+
+        fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(value.to_vec())
+        }
+
+        fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            Vec::deserialize(serde::de::value::SeqAccessDeserializer::new(seq))
+        }
+    }
+
+    deserializer.deserialize_byte_buf(BytesVisitor)
+}
+
 /// A 2D point with floating coordinates, that guarantees finite (non-NaN) values.
 ///
 /// The coordinates are intended to be normalized to [0,1] per axis, with (0,0)
@@ -248,7 +284,13 @@ pub enum ImageDataType {
     ),
     /// Data is RGBA u8 data
     Rgba8 {
-        #[cfg_attr(feature = "use_serde", serde(serialize_with = "serialize_bytes"))]
+        #[cfg_attr(
+            feature = "use_serde",
+            serde(
+                serialize_with = "serialize_bytes",
+                deserialize_with = "deserialize_bytes"
+            )
+        )]
         data: Vec<u8>,
         width: u32,
         height: u32,

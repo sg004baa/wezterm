@@ -1218,8 +1218,7 @@ mod test {
             .unwrap();
         assert_eq!(actual_bytes, legacy_bytes);
 
-        let decoded: ImageDataType = deserialize(Cursor::new(&actual_bytes), false).unwrap();
-        match decoded {
+        let assert_image = |decoded| match decoded {
             ImageDataType::Rgba8 {
                 data: decoded_data,
                 width,
@@ -1232,7 +1231,15 @@ mod test {
                 assert_eq!(hash, expected_hash);
             }
             other => panic!("expected RGBA image data, got {:?}", other),
-        }
+        };
+
+        let decoded: ImageDataType = deserialize(Cursor::new(&legacy_bytes), false).unwrap();
+        assert_image(decoded);
+
+        let compressed_legacy =
+            zstd::encode_all(Cursor::new(&legacy_bytes), zstd::DEFAULT_COMPRESSION_LEVEL).unwrap();
+        let decoded: ImageDataType = deserialize(Cursor::new(compressed_legacy), true).unwrap();
+        assert_image(decoded);
     }
 
     #[test]
