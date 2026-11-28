@@ -24,6 +24,7 @@ Personal fork of [wezterm/wezterm](https://github.com/wezterm/wezterm).
     - Scrollbar hit region heights corrected (`ScrollHit::thumb` field semantics)
     - `compute_background_rect_with_scrollbar` padding argument order corrected
     - Windows releases include `conpty.dll` and `OpenConsole.exe` alongside the WezTerm executables for Kitty graphics in local WSL sessions.
+    - Mux render updates carry their image data with the affected lines, so fast redraws cannot invalidate a later image fetch. Update the mux client and server together.
 
 ---
 
