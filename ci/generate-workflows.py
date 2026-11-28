@@ -146,23 +146,13 @@ class CacheStep(ActionStep):
         )
 
 
-WINDOWS_SCCACHE_PIN_COMMENT = """\
-sccache is pinned to v0.16.0 on Windows. sccache 0.17 and later expand
-cargo's rustc argfile and then spawn rustc with the full command line,
-which is over the Windows limit when building `mux` and fails with
-"The filename or extension is too long" (os error 206).
-Remove the pin once a fixed sccache is released:
-https://github.com/mozilla/sccache/issues/2787"""
-
-
 class SccacheStep(ActionStep):
-    def __init__(self, name, version=None, comment=None):
+    def __init__(self, name, version=None):
         params = {"version": version} if version else None
         super().__init__(
             name,
             action="mozilla-actions/sccache-action@v0.0.9",
             params=params,
-            comment=comment,
         )
 
 
@@ -429,14 +419,7 @@ rustup default {toolchain}
             steps += [
                 SccacheStep(
                     name="Compile with sccache",
-                    **(
-                        {
-                            "version": "v0.16.0",
-                            "comment": WINDOWS_SCCACHE_PIN_COMMENT,
-                        }
-                        if "windows" in self.name
-                        else {}
-                    ),
+                    version="v0.20.1" if "windows" in self.name else None,
                 ),
                 # Cache vendored dependencies
                 CacheStep(
