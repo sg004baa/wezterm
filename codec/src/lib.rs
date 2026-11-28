@@ -442,7 +442,7 @@ macro_rules! pdu {
 /// The overall version of the codec.
 /// This must be bumped when backwards incompatible changes
 /// are made to the types and protocol.
-pub const CODEC_VERSION: usize = 46;
+pub const CODEC_VERSION: usize = 47;
 
 // Defines the Pdu enum.
 // Each struct has an explicit identifying number.
@@ -486,8 +486,7 @@ pdu! {
     SetWindowWorkspace: 43,
     WindowWorkspaceChanged: 44,
     SetFocusedPane: 45,
-    GetImageCell: 46,
-    GetImageCellResponse: 47,
+
     MovePaneToNewTab: 48,
     MovePaneToNewTabResponse: 49,
     ActivatePaneDirection: 50,
@@ -971,21 +970,19 @@ struct LineHyperlink {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
-pub struct SerializedImageCell {
-    pub line_idx: StableRowIndex,
-    pub cell_idx: usize,
-    // The following fields are taken from termwiz::image::ImageCell
-    pub top_left: TextureCoordinate,
-    pub bottom_right: TextureCoordinate,
-    /// Image::data::hash() for the ImageCell::data field
-    pub data_hash: [u8; 32],
-    pub z_index: i32,
-    pub padding_left: u16,
-    pub padding_top: u16,
-    pub padding_right: u16,
-    pub padding_bottom: u16,
-    pub image_id: Option<u32>,
-    pub placement_id: Option<u32>,
+struct SerializedImageCell {
+    row_idx: usize,
+    cell_idx: usize,
+    payload_idx: usize,
+    top_left: TextureCoordinate,
+    bottom_right: TextureCoordinate,
+    z_index: i32,
+    padding_left: u16,
+    padding_top: u16,
+    padding_right: u16,
+    padding_bottom: u16,
+    image_id: Option<u32>,
+    placement_id: Option<u32>,
 }
 
 /// What's all this?
@@ -1000,22 +997,18 @@ pub struct SerializedLines {
     lines: Vec<(StableRowIndex, Line)>,
     hyperlinks: Vec<LineHyperlink>,
     images: Vec<SerializedImageCell>,
+    image_payloads: Vec<Arc<ImageData>>,
 }
 
 impl SerializedLines {
-    /// Reconsitute hyperlinks or other attributes that were decomposed for
-    /// serialization, and return the line data.
-    pub fn extract_data(self) -> (Vec<(StableRowIndex, Line)>, Vec<SerializedImageCell>) {
-        let lines = if self.hyperlinks.is_empty() {
-            self.lines
-        } else {
-            let mut lines = self.lines;
-
+    /// Reconstitute attributes that were decomposed for serialization.
+    pub fn into_lines(mut self) -> Vec<(StableRowIndex, Line)> {
+        if !self.hyperlinks.is_empty() {
             for link in self.hyperlinks {
                 let url = Arc::new(link.link);
 
                 for coord in link.coords {
-                    if let Some((_, line)) = lines.get_mut(coord.line_idx) {
+                    if let Some((_, line)) = self.lines.get_mut(coord.line_idx) {
                         if let Some(cells) =
                             line.cells_mut_for_attr_changes_only().get_mut(coord.cols)
                         {
@@ -1026,10 +1019,37 @@ impl SerializedLines {
                     }
                 }
             }
+        }
 
-            lines
-        };
-        (lines, self.images)
+        for image in self.images {
+            let Some(data) = self.image_payloads.get(image.payload_idx) else {
+                continue;
+            };
+            let Some((_, line)) = self.lines.get_mut(image.row_idx) else {
+                continue;
+            };
+            let Some(cell) = line
+                .cells_mut_for_attr_changes_only()
+                .get_mut(image.cell_idx)
+            else {
+                continue;
+            };
+            cell.attrs_mut()
+                .attach_image(Box::new(termwiz::image::ImageCell::with_z_index(
+                    image.top_left,
+                    image.bottom_right,
+                    Arc::clone(data),
+                    image.z_index,
+                    image.padding_left,
+                    image.padding_top,
+                    image.padding_right,
+                    image.padding_bottom,
+                    image.image_id,
+                    image.placement_id,
+                )));
+        }
+
+        self.lines
     }
 }
 
@@ -1037,8 +1057,10 @@ impl From<Vec<(StableRowIndex, Line)>> for SerializedLines {
     fn from(mut lines: Vec<(StableRowIndex, Line)>) -> Self {
         let mut hyperlinks = vec![];
         let mut images = vec![];
+        let mut image_payloads = vec![];
+        let mut payload_by_hash = HashMap::new();
 
-        for (line_idx, (stable_row_idx, line)) in lines.iter_mut().enumerate() {
+        for (row_idx, (_, line)) in lines.iter_mut().enumerate() {
             let mut current_link: Option<Arc<Hyperlink>> = None;
             let mut current_range = 0..0;
 
@@ -1047,21 +1069,17 @@ impl From<Vec<(StableRowIndex, Line)>> for SerializedLines {
                 .iter_mut()
                 .enumerate()
             {
-                // Unset the hyperlink on the cell, if any, and record that
-                // in the hyperlinks data for later restoration.
                 if let Some(link) = cell.attrs_mut().hyperlink().map(Arc::clone) {
                     cell.attrs_mut().set_hyperlink(None);
                     match current_link.as_ref() {
-                        Some(current) if Arc::ptr_eq(&current, &link) => {
-                            // Continue the current streak
+                        Some(current) if Arc::ptr_eq(current, &link) => {
                             current_range = range_union(current_range, x..x + 1);
                         }
                         Some(prior) => {
-                            // It's a different URL, push the current data and start a new one
                             hyperlinks.push(LineHyperlink {
                                 link: (**prior).clone(),
                                 coords: vec![CellCoordinates {
-                                    line_idx,
+                                    line_idx: row_idx,
                                     cols: current_range,
                                 }],
                             });
@@ -1069,17 +1087,15 @@ impl From<Vec<(StableRowIndex, Line)>> for SerializedLines {
                             current_link = Some(link);
                         }
                         None => {
-                            // Starting a new streak
                             current_range = x..x + 1;
                             current_link = Some(link);
                         }
                     }
                 } else if let Some(link) = current_link.take() {
-                    // Wrap up a prior streak
                     hyperlinks.push(LineHyperlink {
                         link: (*link).clone(),
                         coords: vec![CellCoordinates {
-                            line_idx,
+                            line_idx: row_idx,
                             cols: current_range,
                         }],
                     });
@@ -1090,9 +1106,16 @@ impl From<Vec<(StableRowIndex, Line)>> for SerializedLines {
                     for imcell in cell_images {
                         let (padding_left, padding_top, padding_right, padding_bottom) =
                             imcell.padding();
+                        let hash = imcell.image_data().hash();
+                        let payload_idx = *payload_by_hash.entry(hash).or_insert_with(|| {
+                            let idx = image_payloads.len();
+                            image_payloads.push(Arc::clone(imcell.image_data()));
+                            idx
+                        });
                         images.push(SerializedImageCell {
-                            line_idx: *stable_row_idx,
+                            row_idx,
                             cell_idx: x,
+                            payload_idx,
                             top_left: imcell.top_left(),
                             bottom_right: imcell.bottom_right(),
                             z_index: imcell.z_index(),
@@ -1102,18 +1125,16 @@ impl From<Vec<(StableRowIndex, Line)>> for SerializedLines {
                             padding_bottom,
                             image_id: imcell.image_id(),
                             placement_id: imcell.placement_id(),
-                            data_hash: imcell.image_data().hash(),
                         });
                     }
                 }
                 cell.attrs_mut().clear_images();
             }
             if let Some(link) = current_link.take() {
-                // Wrap up final streak
                 hyperlinks.push(LineHyperlink {
                     link: (*link).clone(),
                     coords: vec![CellCoordinates {
-                        line_idx,
+                        line_idx: row_idx,
                         cols: current_range,
                     }],
                 });
@@ -1124,6 +1145,7 @@ impl From<Vec<(StableRowIndex, Line)>> for SerializedLines {
             lines,
             hyperlinks,
             images,
+            image_payloads,
         }
     }
 }
@@ -1153,23 +1175,96 @@ pub struct SearchScrollbackResponse {
     pub results: Vec<mux::pane::SearchResult>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
-pub struct GetImageCell {
-    pub pane_id: PaneId,
-    pub line_idx: StableRowIndex,
-    pub cell_idx: usize,
-    pub data_hash: [u8; 32],
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
-pub struct GetImageCellResponse {
-    pub pane_id: PaneId,
-    pub data: Option<Arc<ImageData>>,
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_get_lines_round_trips_image_snapshot() {
+        use termwiz::image::{ImageCell, ImageDataType};
+
+        fn image(bytes: &[u8]) -> Arc<ImageData> {
+            Arc::new(ImageData::with_data(ImageDataType::EncodedFile(
+                bytes.to_vec(),
+            )))
+        }
+
+        fn set_image(line: &mut Line, x: usize, data: Arc<ImageData>, placement_id: u32) {
+            line.cells_mut_for_attr_changes_only()
+                .get_mut(x)
+                .unwrap()
+                .attrs_mut()
+                .attach_image(Box::new(ImageCell::with_z_index(
+                    TextureCoordinate::new_f32(0.0, 0.0),
+                    TextureCoordinate::new_f32(1.0, 1.0),
+                    data,
+                    -1,
+                    1,
+                    2,
+                    3,
+                    4,
+                    Some(7),
+                    Some(placement_id),
+                )));
+        }
+
+        let original_data = image(b"snapshot pixels");
+        let other_data = image(b"independent pixels");
+        let mut source = Line::with_width(3, 1);
+        set_image(&mut source, 0, Arc::clone(&original_data), 10);
+        set_image(&mut source, 1, Arc::clone(&original_data), 10);
+        set_image(&mut source, 2, Arc::clone(&other_data), 11);
+
+        let response = GetLinesResponse {
+            pane_id: 0,
+            lines: SerializedLines::from(vec![(42, source.clone())]),
+        };
+        source.cells_mut_for_attr_changes_only()[0]
+            .attrs_mut()
+            .clear_images();
+        set_image(&mut source, 0, image(b"overwritten pixels"), 12);
+
+        let mut encoded = Vec::new();
+        Pdu::GetLinesResponse(response)
+            .encode(&mut encoded, 1)
+            .unwrap();
+        let decoded = Pdu::decode(encoded.as_slice()).unwrap();
+        let Pdu::GetLinesResponse(response) = decoded.pdu else {
+            panic!("expected GetLinesResponse");
+        };
+        let lines = response.lines.into_lines();
+        assert_eq!(lines[0].0, 42);
+
+        let (_, line) = &lines[0];
+        let images: Vec<_> = (0..3)
+            .map(|x| {
+                line.get_cell(x)
+                    .unwrap()
+                    .attrs()
+                    .images()
+                    .unwrap()
+                    .remove(0)
+            })
+            .collect();
+        assert!(Arc::ptr_eq(images[0].image_data(), images[1].image_data()));
+
+        for (image, (expected_id, expected_bytes)) in images.iter().zip([
+            (10, &b"snapshot pixels"[..]),
+            (10, &b"snapshot pixels"[..]),
+            (11, &b"independent pixels"[..]),
+        ]) {
+            match &*image.image_data().data() {
+                ImageDataType::EncodedFile(bytes) => assert_eq!(bytes, expected_bytes),
+                other => panic!("unexpected image data: {:?}", other),
+            }
+            assert_eq!(image.image_id(), Some(7));
+            assert_eq!(image.placement_id(), Some(expected_id));
+            assert_eq!(image.z_index(), -1);
+            assert_eq!(image.padding(), (1, 2, 3, 4));
+            assert_eq!(image.top_left(), TextureCoordinate::new_f32(0.0, 0.0));
+            assert_eq!(image.bottom_right(), TextureCoordinate::new_f32(1.0, 1.0));
+        }
+    }
 
     #[test]
     fn test_frame() {

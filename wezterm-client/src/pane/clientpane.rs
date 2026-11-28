@@ -1,6 +1,6 @@
 use crate::domain::{ClientDomain, ClientInner, PaneResizeOrigin};
 use crate::pane::mousestate::MouseState;
-use crate::pane::renderable::{hydrate_lines, RenderableInner, RenderableState};
+use crate::pane::renderable::{RenderableInner, RenderableState};
 use anyhow::bail;
 use async_trait::async_trait;
 use codec::*;
@@ -141,10 +141,7 @@ impl ClientPane {
             Pdu::GetPaneRenderChangesResponse(mut delta) => {
                 *self.mouse_grabbed.lock() = delta.mouse_grabbed;
                 *self.alt_screen_active.lock() = delta.alt_screen_active;
-
-                let bonus_lines = std::mem::take(&mut delta.bonus_lines);
-                let client = { Arc::clone(&self.renderable.lock().inner.borrow().client) };
-                let bonus_lines = hydrate_lines(client, delta.pane_id, bonus_lines).await;
+                let bonus_lines = std::mem::take(&mut delta.bonus_lines).into_lines();
 
                 self.renderable
                     .lock()
