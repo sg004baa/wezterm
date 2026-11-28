@@ -1180,6 +1180,62 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_rgba_image_wire_compatibility() {
+        use termwiz::image::ImageDataType;
+
+        // Keep the legacy Vec serialization shape, with the same enum index as
+        // ImageDataType::Rgba8, without relying on the production serializer.
+        #[allow(dead_code)]
+        #[derive(Serialize)]
+        enum LegacyImageDataType {
+            EncodedFile,
+            EncodedLease,
+            Rgba8 {
+                data: Vec<u8>,
+                width: u32,
+                height: u32,
+                hash: [u8; 32],
+            },
+        }
+
+        let data: Vec<u8> = (0..144).map(|byte| byte as u8).collect();
+        let expected_hash = ImageDataType::hash_bytes(&data);
+        let image = ImageDataType::new_single_frame(6, 6, data.clone());
+        let legacy = LegacyImageDataType::Rgba8 {
+            data: data.clone(),
+            width: 6,
+            height: 6,
+            hash: expected_hash,
+        };
+
+        let mut actual_bytes = Vec::new();
+        image
+            .serialize(&mut varbincode::Serializer::new(&mut actual_bytes))
+            .unwrap();
+        let mut legacy_bytes = Vec::new();
+        legacy
+            .serialize(&mut varbincode::Serializer::new(&mut legacy_bytes))
+            .unwrap();
+        assert_eq!(actual_bytes, legacy_bytes);
+
+        let decoded: ImageDataType = deserialize(Cursor::new(&actual_bytes), false).unwrap();
+        match decoded {
+            ImageDataType::Rgba8 {
+                data: decoded_data,
+                width,
+                height,
+                hash,
+            } => {
+                assert_eq!(decoded_data, data);
+                assert_eq!(width, 6);
+                assert_eq!(height, 6);
+                assert_eq!(hash, expected_hash);
+            }
+            other => panic!("expected RGBA image data, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_get_lines_round_trips_image_snapshot() {
         use termwiz::image::{ImageCell, ImageDataType};
 

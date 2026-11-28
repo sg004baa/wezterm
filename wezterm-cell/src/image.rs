@@ -38,6 +38,14 @@ where
     value.into_inner().serialize(serializer)
 }
 
+#[cfg(feature = "use_serde")]
+fn serialize_bytes<S>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_bytes(value)
+}
+
 /// A 2D point with floating coordinates, that guarantees finite (non-NaN) values.
 ///
 /// The coordinates are intended to be normalized to [0,1] per axis, with (0,0)
@@ -240,6 +248,7 @@ pub enum ImageDataType {
     ),
     /// Data is RGBA u8 data
     Rgba8 {
+        #[cfg_attr(feature = "use_serde", serde(serialize_with = "serialize_bytes"))]
         data: Vec<u8>,
         width: u32,
         height: u32,
