@@ -453,13 +453,23 @@ rustup default {toolchain}
             return "PATH C:\\Strawberry\\perl\\bin;%PATH%\n" + cmd
         return cmd
 
-    def build_all_release(self):
+    def build_all_release(self, *, combine_windows=False):
         bin_crates = [
             "wezterm",
             "wezterm-gui",
             "wezterm-mux-server",
             "strip-ansi-escapes",
         ]
+        if combine_windows and "win" in self.name:
+            return [
+                RunStep(
+                    name="Build Windows binaries (Release mode)",
+                    shell="cmd",
+                    run=self.fixup_windows_path(
+                        "cargo build --release -p " + " -p ".join(bin_crates)
+                    ),
+                )
+            ]
         steps = []
         for bin in bin_crates:
             if "win" in self.name:
@@ -791,7 +801,7 @@ rustup default {toolchain}
 
     def pull_request(self):
         steps = self.prep_environment()
-        steps += self.build_all_release()
+        steps += self.build_all_release(combine_windows=True)
         steps += self.test_all()
         steps += self.package()
         steps += self.upload_artifact()
