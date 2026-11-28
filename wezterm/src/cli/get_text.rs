@@ -77,8 +77,7 @@ impl GetText {
 
         let lines = lines
             .lines
-            .extract_data()
-            .0
+            .into_lines()
             .into_iter()
             .map(|(_idx, line)| line)
             .collect();
